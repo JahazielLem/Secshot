@@ -54,6 +54,7 @@ final class CaptureService {
     func capture(_ mode: CaptureMode, delay: Int = 0, openEditor: Bool? = nil,
                  completion: ((CaptureItem?) -> Void)? = nil) {
         guard !isCapturing else { return }
+        guard ScreenPermission.ensure() else { completion?(nil); return }
         isCapturing = true
         CaptureBar.shared.suspend()
 

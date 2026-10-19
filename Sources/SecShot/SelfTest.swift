@@ -9,11 +9,19 @@ import AppKit
 /// Command-line utilities:
 ///   SecShot --selftest <folder>    renders sample images with the rendering engine
 ///   SecShot --make-icon <iconset>  generates the app iconset
+///   SecShot --permission-status <file>  writes whether Screen Recording access is granted
 enum CommandLineTools {
     static func runIfRequested() {
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--selftest"), i + 1 < args.count {
             selfTest(URL(fileURLWithPath: args[i + 1]))
+            exit(0)
+        }
+        if let i = args.firstIndex(of: "--permission-status"), i + 1 < args.count {
+            // Diagnostics: launch with `open -a SecShot --args --permission-status <file>` so that
+            // SecShot (not the terminal) is the process macOS evaluates.
+            let status = "screenCapture=\(CGPreflightScreenCaptureAccess())\n"
+            try? status.write(toFile: args[i + 1], atomically: true, encoding: .utf8)
             exit(0)
         }
         if let i = args.firstIndex(of: "--make-icon"), i + 1 < args.count {

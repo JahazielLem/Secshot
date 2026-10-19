@@ -252,9 +252,28 @@ The workflow builds a universal binary, runs the self-test, packages a DMG and a
 SHA-256 checksums and publishes the GitHub release. Third-party actions are pinned by commit,
 and signing secrets only ever exist in a temporary keychain that is deleted afterwards.
 
-To ship builds that install without Gatekeeper warnings, add these repository secrets
-(*Settings → Secrets and variables → Actions*). An
-[Apple Developer Program](https://developer.apple.com/programs/) membership is required:
+Release builds can be signed at three levels:
+
+| Level | Gatekeeper on first launch | Screen Recording permission after updating | Cost |
+|---|---|---|---|
+| Ad-hoc (no secrets) | Warning | **Lost on every update** | Free |
+| Stable self-signed certificate | Warning | **Kept** | Free |
+| Developer ID + notarization | No warning | Kept | Apple Developer Program |
+
+**Stable self-signed certificate (recommended without a paid account).** Generate it once and
+store it as repository secrets:
+
+```bash
+scripts/create-release-cert.sh
+```
+
+The script prints the values for `MACOS_CERT_P12`, `MACOS_CERT_PASSWORD` and
+`MACOS_SIGN_IDENTITY`. Every release is then signed with the same certificate, so macOS keeps the
+permission across updates. Back up the generated `.p12`: if you lose it, users have to grant the
+permission once more.
+
+**Developer ID.** To ship builds that install without Gatekeeper warnings, set these secrets
+instead. An [Apple Developer Program](https://developer.apple.com/programs/) membership is required:
 
 | Secret | Value |
 |---|---|
@@ -265,7 +284,29 @@ To ship builds that install without Gatekeeper warnings, add these repository se
 | `APPLE_TEAM_ID` | 10-character Team ID |
 | `APPLE_APP_PASSWORD` | App-specific password from appleid.apple.com |
 
-Without these secrets the release is still published, but it is ad-hoc signed.
+Without any secrets the release is still published, but it is ad-hoc signed.
+
+## Troubleshooting
+
+**SecShot keeps asking for Screen Recording permission even though it is enabled.**
+macOS ties the permission to the app's code signature. If SecShot was replaced by a build with a
+different signature (for example an ad-hoc build replaced by a signed one), System Settings still
+shows it as enabled, but that entry no longer matches. To fix it:
+
+1. Click **Repair Permission** in the alert (or in *Settings → Permissions*).
+2. Enable SecShot again in *System Settings → Privacy & Security → Screen Recording*.
+3. Choose **Quit & Reopen**.
+
+The manual equivalent is:
+
+```bash
+tccutil reset ScreenCapture local.secshot.app
+```
+
+Using a stable signature (see [Releasing](#releasing)) prevents this from happening on updates.
+
+**Captures only show the wallpaper.** This is the same cause: the permission is not active for
+the running build. Follow the steps above.
 
 ## Roadmap
 

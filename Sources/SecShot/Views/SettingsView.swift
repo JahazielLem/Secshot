@@ -25,6 +25,7 @@ struct SettingsView: View {
     @ObservedObject private var barState = CaptureBar.shared.state
     @ViewState private var launchAtLogin = LoginItem.isEnabled
     @ViewState private var loginError: String?
+    @ViewState private var screenAccess = ScreenPermission.isGranted
 
     var body: some View {
         Form {
@@ -68,6 +69,23 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            Section("Permissions") {
+                LabeledContent("Screen Recording") {
+                    Label(screenAccess ? "Granted" : "Not granted",
+                          systemImage: screenAccess ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(screenAccess ? .green : .orange)
+                }
+                if !screenAccess {
+                    Text("If SecShot already looks enabled in System Settings, the entry belongs to an older build. Repair it, enable SecShot again and relaunch.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        Button("Repair Permission") { ScreenPermission.repair() }
+                        Button("Relaunch SecShot") { ScreenPermission.relaunch() }
+                    }
+                }
+            }
+            .onAppear { screenAccess = ScreenPermission.isGranted }
+
             Section("Capture") {
                 Toggle("Hide SecShot while capturing", isOn: $hide)
                 Toggle("Open the editor after capturing", isOn: $openEditor)
@@ -76,11 +94,7 @@ struct SettingsView: View {
                 LabeledContent("Global hotkeys") {
                     Text("⌃⇧4 region · ⌃⇧5 window · ⌃⇧3 screen · ⌃⇧2 bar").font(.callout)
                 }
-                Button("Open Screen Recording Permissions…") {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }
+                Button("Open Screen Recording Permissions…") { ScreenPermission.openSettings() }
             }
 
             Section("Decoration & Export") {

@@ -76,10 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HotKeyManager.shared.setup()
         LoginItem.migrateLegacyRegistration()
         if !launchedInBackground {
-            if !CGPreflightScreenCaptureAccess() {
-                CGRequestScreenCaptureAccess()
-            }
             WindowManager.shared.showLibrary()
+            DispatchQueue.main.async { ScreenPermission.checkAtLaunch() }
         }
         CaptureBar.shared.onChange = { [weak self] in self?.updateBarMenuItem() }
         CaptureBar.shared.restore()

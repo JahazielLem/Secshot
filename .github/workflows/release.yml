@@ -27,7 +27,7 @@ jobs:
   release:
     runs-on: macos-15
     env:
-      # Optional. Without them the release is ad-hoc signed (see README → Distribution).
+      # Optional. Without them the release is ad-hoc signed (see README → Releasing).
       MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
       MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
       MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
@@ -52,6 +52,8 @@ jobs:
           echo "VERSION=$V" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
 
+      # MACOS_CERT_P12 can be a Developer ID certificate or the self-signed certificate created by
+      # scripts/create-release-cert.sh. Untrusted self-signed identities are still usable by codesign.
       - name: Import signing certificate
         if: env.MACOS_CERT_P12 != ''
         run: |
@@ -89,8 +91,11 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           TAG="v$VERSION"
+          GATEKEEPER_NOTE=$'> [!IMPORTANT]\n> This build is not notarized by Apple. After copying it to Applications, the first time either:\n> - open System Settings → Privacy & Security → **Open Anyway**, or\n> - run `xattr -dr com.apple.quarantine /Applications/SecShot.app`'
           if [[ "$SIGN_IDENTITY" == Developer\ ID\ Application* && -n "$APPLE_ID" ]]; then
             INSTALL_NOTE="Signed with a Developer ID and notarized by Apple: open the DMG and drag SecShot to Applications."
+          elif [[ "$SIGN_IDENTITY" != "-" ]]; then
+            INSTALL_NOTE="$GATEKEEPER_NOTE"$'\n\nThis build is signed with the stable SecShot release certificate, so the Screen Recording permission is kept when you update.'
           else
             INSTALL_NOTE=$'> [!IMPORTANT]\n> This build is not notarized by Apple. After copying it to Applications, the first time either:\n> - open System Settings → Privacy & Security → **Open Anyway**, or\n> - run `xattr -dr com.apple.quarantine /Applications/SecShot.app`'
           fi
