@@ -1,0 +1,38 @@
+# SecShot — security evidence capture tool for macOS.
+# Copyright (C) 2026 JahazielLem
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Made by AI
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build (universal arm64 + x86_64)
+        env:
+          UNIVERSAL: "1"
+          SIGN_IDENTITY: "-"
+        run: ./build.sh
+
+      - name: Rendering engine self-test
+        run: build/SecShot.app/Contents/MacOS/SecShot --selftest "$RUNNER_TEMP/selftest"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: selftest-images
+          path: ${{ runner.temp }}/selftest
+          retention-days: 7

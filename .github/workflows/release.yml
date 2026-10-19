@@ -1,0 +1,120 @@
+# SecShot — security evidence capture tool for macOS.
+# Copyright (C) 2026 JahazielLem
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Made by AI
+
+name: Release
+
+# Publishes a release when a vX.Y.Z tag is pushed (or manually from the Actions tab).
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 1.0.0). The vX.Y.Z tag is created"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      # Optional. Without them the release is ad-hoc signed (see README → Distribution).
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT" == "workflow_dispatch" ]]; then V="$INPUT_VERSION"; else V="${REF_NAME#v}"; fi
+          if [[ ! "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Invalid version: $V"; exit 1
+          fi
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+
+      - name: Import signing certificate
+        if: env.MACOS_CERT_P12 != ''
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KC_PASS="$(openssl rand -hex 24)"
+          security create-keychain -p "$KC_PASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KC_PASS" "$KEYCHAIN"
+          printf '%s' "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KC_PASS" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          echo "SIGN_IDENTITY=$MACOS_SIGN_IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Ad-hoc signing (no certificate)
+        if: env.MACOS_CERT_P12 == ''
+        run: echo "SIGN_IDENTITY=-" >> "$GITHUB_ENV"
+
+      - name: Build universal app
+        env:
+          UNIVERSAL: "1"
+        run: ./build.sh
+
+      - name: Rendering engine self-test
+        run: build/SecShot.app/Contents/MacOS/SecShot --selftest "$RUNNER_TEMP/selftest"
+
+      - name: Package (DMG, ZIP, SHA-256)
+        run: scripts/package.sh
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          TAG="v$VERSION"
+          if [[ "$SIGN_IDENTITY" == Developer\ ID\ Application* && -n "$APPLE_ID" ]]; then
+            INSTALL_NOTE="Signed with a Developer ID and notarized by Apple: open the DMG and drag SecShot to Applications."
+          else
+            INSTALL_NOTE=$'> [!IMPORTANT]\n> This build is not notarized by Apple. After copying it to Applications, the first time either:\n> - open System Settings → Privacy & Security → **Open Anyway**, or\n> - run `xattr -dr com.apple.quarantine /Applications/SecShot.app`'
+          fi
+          {
+            echo "## Installation"
+            echo
+            echo "1. Download \`SecShot-$VERSION.dmg\`, open it and drag **SecShot** to **Applications**."
+            echo "2. Launch SecShot, grant **Screen Recording** (System Settings → Privacy & Security), then relaunch it."
+            echo
+            echo "$INSTALL_NOTE"
+            echo
+            echo "Requires macOS 14 or later · Apple Silicon and Intel."
+            echo
+            echo "## Verify integrity"
+            echo '```'
+            echo "shasum -a 256 -c SHA256SUMS.txt"
+            echo '```'
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" dist/* \
+            --repo "$REPO" --target "$SHA" \
+            --title "SecShot $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            --generate-notes
+
+      - name: Remove temporary keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
