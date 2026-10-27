@@ -13,6 +13,7 @@ with the speed of the native macOS screenshot tool and the workflow of a dedicat
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)
 ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
 
+[What's new](#whats-new-in-030) ·
 [Features](#features) ·
 [Installation](#installation) ·
 [Usage](#usage) ·
@@ -37,14 +38,38 @@ were not tampered with. SecShot solves that workflow end to end:
 - **Integrity:** every capture is hashed (SHA-256) at capture time, and exports ship with a manifest.
 - **Before/after evidence:** side-by-side comparisons, pixel-level diffs and attack-chain timelines.
 - **Report-ready output:** macOS-style shadows, metadata-free files, and drag-and-drop into your report.
+- **From proxy to report:** import Burp Suite or HAR traffic and turn requests into styled, redacted
+  code evidence, comparisons and timelines.
+
+## What's new in 0.3.0
+
+- **HTTP Traffic** — import Burp Suite “Save items” XML, HAR files or raw requests, then create a
+  snippet, compare two requests/responses with a diff, or build a timeline. Credentials are redacted
+  by default.
+- **One main window** with a navigation rail: Library · Compare · Code · Traffic.
+- **Code Snippet** (0.2) — syntax highlighting, 12 themes (incl. Catppuccin), VS Code / TextMate theme
+  import, HTTP security-header analysis, Compare and Timeline modes, `[REDACTED]` markers and JSON
+  pretty-printing.
+- **Focus spotlight** and **zoom** editor tools, and an **External Images** tab to compare images
+  not taken with SecShot.
+
+See [CHANGELOG.md](CHANGELOG.md) for details.
+
+<p align="center">
+  <img src="docs/images/15-traffic.png" alt="HTTP Traffic section with imported Burp Suite items" width="820">
+</p>
 
 ## Features
+
+SecShot runs as one main window with a navigation rail — **Library**, **Compare**, **Code** and
+**Traffic** — plus the menu bar icon, the floating capture bar and global hotkeys. Settings and the
+per-image editors open in their own windows.
 
 ### Capture
 | | |
 |---|---|
 | **Region / Window / Full screen** | Uses the native macOS capture engine, so selection behaves exactly like ⌘⇧4. |
-| **Global hotkeys** | ⌃⇧4 region · ⌃⇧5 window · ⌃⇧3 full screen · ⌃⇧2 toggle capture bar. |
+| **Global hotkeys** | ⌃⇧4 region · ⌃⇧5 window · ⌃⇧3 full screen · ⌃⇧2 toggle capture bar · ⌃⇧6 / ⌃⇧7 / ⌃⇧8 open Code, Compare, Traffic. |
 | **Floating capture bar** | A ⌘⇧5-style toolbar that docks to any screen edge or floats anywhere, and can be turned on and off. |
 | **Timer** | 5 s and 10 s delays to capture menus and hover states. |
 | **Menu bar icon** | Every capture action is one click away. |
@@ -189,7 +214,7 @@ shasum -a 256 -c SHA256SUMS.txt
 
 ## Usage
 
-### Hotkeys
+### Global hotkeys (work from any app)
 
 | Shortcut | Action |
 |---|---|
@@ -197,14 +222,21 @@ shasum -a 256 -c SHA256SUMS.txt
 | ⌃⇧5 | Capture a window / app |
 | ⌃⇧3 | Capture the full screen |
 | ⌃⇧2 | Show / hide the floating capture bar |
-| ⌃⇧6 | Open Code Snippet (from any app) |
-| ⌃⇧7 | Open Comparison & Timeline (from any app) |
-| ⌘1 / ⌘2 | Open the Library / Comparison window |
+| ⌃⇧6 | Open Code Snippet |
+| ⌃⇧7 | Open Compare & Timeline |
+| ⌃⇧8 | Open HTTP Traffic |
+
+### Main window
+
+| Shortcut | Action |
+|---|---|
+| ⌘1 | Library |
+| ⌘2 | Compare & Timeline |
 | ⌘3 | Compare external images |
-| ⌘4 | Code snippet |
-| ⌘5 | HTTP traffic |
+| ⌘4 | Code Snippet |
+| ⌘5 | HTTP Traffic |
 | ⇧⌘I | Import HTTP traffic (Burp XML, HAR) |
-| ⌃⇧8 | Open HTTP traffic (from any app) |
+| ⌘O | Import images into the library |
 | ⌘, | Settings |
 
 ### Editor shortcuts
@@ -237,7 +269,10 @@ shasum -a 256 -c SHA256SUMS.txt
 2. Capture with a hotkey or the capture bar; the editor opens on the new capture.
 3. Click **Detect & Redact Sensitive Data**, review the result, and add arrows, callouts and notes.
 4. For a change you exploited, open **Compare**, capture the BASE and the CHANGE, and save the diff.
-5. Select the evidence and choose **Export with Manifest…** to get the images, the CSV manifest and a Markdown report.
+5. For web findings, export the requests from Burp (**Save items**), import them in **Traffic** (⇧⌘I),
+   select the original and the tampered request and choose **Compare › Compare Requests**. Review the
+   redaction in **Code** and save it as evidence (⌘S).
+6. Select the evidence and choose **Export with Manifest…** to get the images, the CSV manifest and a Markdown report.
 
 ### Launch at login
 
@@ -249,6 +284,9 @@ its Dock icon to open the library.
 
 - **Everything stays local.** SecShot makes no network connections. Captures live in
   `~/Pictures/SecShot` alongside a `library.json` index.
+- **Untrusted input is handled defensively.** Burp XML is parsed with external entities disabled
+  (no XXE), files over 300 MB are refused, and imported traffic and pasted code are kept in memory
+  only, never written to disk unless you save an image.
 - **Originals are preserved.** The unedited PNG and its SHA-256 are kept for chain of custody, and
   exports are always flattened, so no redacted pixels survive in layers.
 - **Choose the right redaction.** Pixelation and blur reduce legibility; for passwords, tokens and
@@ -289,7 +327,7 @@ Screen Recording permission across rebuilds (ad-hoc signatures lose it every tim
 
 | Variable | Default | Description |
 |---|---|---|
-| `VERSION` | `0.1.0` | App version |
+| `VERSION` | `0.3.0` | App version |
 | `BUILD_NUMBER` | `1` | Build number |
 | `UNIVERSAL` | `0` | `1` builds a universal arm64 + x86_64 binary (requires Xcode) |
 | `SIGN_IDENTITY` | auto | Signing identity; `Developer ID Application: …` enables hardened runtime and notarization |
@@ -300,8 +338,20 @@ Screen Recording permission across rebuilds (ad-hoc signatures lose it every tim
 build/SecShot.app/Contents/MacOS/SecShot --selftest /tmp/secshot-selftest
 ```
 
-Renders sample annotations, decorations, diffs, timelines and automatic redaction without
-needing screen access. CI runs it on every push.
+Renders sample annotations, decorations, diffs, timelines, code snippets and automatic redaction
+without needing screen access. CI runs it on every push.
+
+### Command-line helpers
+
+| Command | Purpose |
+|---|---|
+| `--codeshot <in> <out.png> [theme] [frame] [background]` | Render a code snippet (theme can be a name or a theme file) |
+| `--codecompare <before> <after> <out.png> [theme]` | Before/after diff of two snippets |
+| `--codetimeline <out.png> <step files…>` | Numbered timeline of snippets |
+| `--traffic <burp.xml\|file.har\|request.txt> [a b out.png]` | List imported items; optionally compare two requests |
+| `--permission-status <file>` / `--login-status <file>` | Diagnostics (run through `open -a SecShot --args …`) |
+
+Run them with `/Applications/SecShot.app/Contents/MacOS/SecShot`.
 
 ### Project layout
 
@@ -404,7 +454,7 @@ the running build. Follow the steps above.
 
 ## Roadmap
 
-Planned ideas — Burp/HAR import, finding templates with CVSS, reporting-platform integrations,
+Planned ideas — finding templates with CVSS, reporting-platform integrations, copy as `curl`,
 automatic redaction inside code, retest mode and more — are tracked in [ROADMAP.md](ROADMAP.md).
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 
