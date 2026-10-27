@@ -26,6 +26,19 @@ final class LibraryStore: ObservableObject {
     @Published var compareChangeID: UUID?
     @Published var timelineIDs: [UUID] = []
 
+    // Comparison workspace for external images (not taken with SecShot).
+    @Published var workspaceBaseID: UUID?
+    @Published var workspaceChangeID: UUID?
+    @Published var workspaceTimelineIDs: [UUID] = []
+
+    /// Incremented on every edit so open comparisons can re-render.
+    @Published private(set) var editRevision = 0
+
+    /// Evidence shown in the library (excludes workspace images).
+    var libraryItems: [CaptureItem] { items.filter { !$0.isWorkspace } }
+    /// External images added to the comparison workspace.
+    var workspaceItems: [CaptureItem] { items.filter(\.isWorkspace).sorted { $0.createdAt < $1.createdAt } }
+
     let directory: URL
     private var counters: [String: Int] = [:]
     private let imageCache = NSCache<NSString, ImageBox>()
@@ -51,7 +64,15 @@ final class LibraryStore: ObservableObject {
         guard let data = try? Data(contentsOf: indexURL) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        guard let index = try? decoder.decode(Index.self, from: data) else { return }
+        guard let index = try? decoder.decode(Index.self, from: data) else {
+            // Never overwrite an index we cannot read (e.g. written by a newer version):
+            // keep a copy next to it before this session saves a new one.
+            let stamp = Int(Date().timeIntervalSince1970)
+            let backup = directory.appendingPathComponent("library.unreadable-\(stamp).json")
+            try? FileManager.default.copyItem(at: indexURL, to: backup)
+            NSLog("SecShot: could not read library.json; a copy was saved to \(backup.lastPathComponent)")
+            return
+        }
         items = index.items
             .filter { FileManager.default.fileExists(atPath: fileURL(for: $0).path) }
             .sorted { $0.createdAt > $1.createdAt }
@@ -116,7 +137,7 @@ final class LibraryStore: ObservableObject {
 
     func nextNumber(for prefix: String) -> Int {
         var maxN = counters[prefix] ?? 0
-        for item in items where item.name.hasPrefix(prefix) {
+        for item in items where !item.isWorkspace && item.name.hasPrefix(prefix) {
             if let n = Int(item.name.dropFirst(prefix.count)) { maxN = max(maxN, n) }
         }
         return maxN + 1
@@ -220,6 +241,61 @@ final class LibraryStore: ObservableObject {
         if !added.isEmpty { selection = Set(added) }
     }
 
+    // MARK: - Comparison workspace (external images)
+
+    private var workspaceDirectory: URL { directory.appendingPathComponent("Workspace", isDirectory: true) }
+
+    /// Copies external images into the workspace. Names come from the original file names and
+    /// the naming convention is not consumed. Returns the new items in the given order.
+    @discardableResult
+    func addWorkspaceImages(_ urls: [URL]) -> [CaptureItem] {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: workspaceDirectory, withIntermediateDirectories: true)
+        var added: [CaptureItem] = []
+        for url in urls {
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let cg = CGImageSourceCreateImageAtIndex(source, 0, nil) else { continue }
+            let base = sanitize(url.deletingPathExtension().lastPathComponent)
+            var fileName = "Workspace/\(base).png"
+            var n = 2
+            while fm.fileExists(atPath: directory.appendingPathComponent(fileName).path) {
+                fileName = "Workspace/\(base)_\(n).png"; n += 1
+            }
+            let dest = directory.appendingPathComponent(fileName)
+            do {
+                if (CGImageSourceGetType(source) as String?) == UTType.png.identifier {
+                    try fm.copyItem(at: url, to: dest)
+                } else {
+                    guard let data = ExportService.encode(cg, format: .png, dpi: nil) else { continue }
+                    try data.write(to: dest)
+                }
+            } catch {
+                NSLog("SecShot: could not add workspace image: \(error)")
+                continue
+            }
+            let item = CaptureItem(name: base, fileName: fileName, createdAt: Date(), mode: "external",
+                                   sha256: Hashing.sha256(fileAt: dest),
+                                   pixelWidth: cg.width, pixelHeight: cg.height,
+                                   notes: "Source: \(url.lastPathComponent)", workspace: true)
+            items.append(item)
+            added.append(item)
+        }
+        if !added.isEmpty { persist() }
+        return added
+    }
+
+    /// Moves a workspace image into the library as evidence, applying the naming convention.
+    func promoteToLibrary(_ id: UUID) {
+        guard let i = items.firstIndex(where: { $0.id == id }), items[i].isWorkspace else { return }
+        items[i].workspace = nil
+        items[i].mode = "import"
+        rename(id, to: takeNextName())
+        workspaceTimelineIDs.removeAll { $0 == id }
+        if workspaceBaseID == id { workspaceBaseID = nil }
+        if workspaceChangeID == id { workspaceChangeID = nil }
+        persist()
+    }
+
     // MARK: - Edits
 
     /// Updates only the editable fields so concurrent renames are not overwritten.
@@ -228,6 +304,7 @@ final class LibraryStore: ObservableObject {
         items[i].annotations = annotations
         items[i].crop = crop
         items[i].notes = notes
+        editRevision += 1
         persist()
     }
 
@@ -236,7 +313,8 @@ final class LibraryStore: ObservableObject {
         guard !trimmed.isEmpty, let i = items.firstIndex(where: { $0.id == id }),
               items[i].name != trimmed else { return }
         let oldURL = fileURL(for: items[i])
-        let fileName = uniqueFileName(sanitize(trimmed), ext: "png", ignoring: items[i].fileName)
+        let folder = items[i].isWorkspace ? "Workspace/" : ""
+        let fileName = uniqueFileName(folder + sanitize(trimmed), ext: "png", ignoring: items[i].fileName)
         do {
             if fileName != items[i].fileName {
                 try FileManager.default.moveItem(at: oldURL, to: directory.appendingPathComponent(fileName))
@@ -264,6 +342,9 @@ final class LibraryStore: ObservableObject {
         items.removeAll { ids.contains($0.id) }
         selection.subtract(ids)
         timelineIDs.removeAll { ids.contains($0) }
+        workspaceTimelineIDs.removeAll { ids.contains($0) }
+        if let b = workspaceBaseID, ids.contains(b) { workspaceBaseID = nil }
+        if let c = workspaceChangeID, ids.contains(c) { workspaceChangeID = nil }
         if let b = compareBaseID, ids.contains(b) { compareBaseID = nil }
         if let c = compareChangeID, ids.contains(c) { compareChangeID = nil }
         persist()

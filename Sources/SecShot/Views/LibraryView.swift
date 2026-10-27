@@ -16,8 +16,8 @@ struct LibraryView: View {
     @ViewState private var renameText = ""
 
     private var filtered: [CaptureItem] {
-        guard !search.isEmpty else { return store.items }
-        return store.items.filter {
+        guard !search.isEmpty else { return store.libraryItems }
+        return store.libraryItems.filter {
             $0.name.localizedCaseInsensitiveContains(search) || $0.notes.localizedCaseInsensitiveContains(search)
         }
     }
@@ -68,9 +68,16 @@ struct LibraryView: View {
                     }
                 }
                 HStack(spacing: 6) {
-                    Button { WindowManager.shared.showCompare() } label: {
+                    Menu {
+                        Button("Library Captures") { WindowManager.shared.showCompare() }
+                        Button("External Images…") { WindowManager.shared.showCompare(external: true) }
+                    } label: {
                         Label("Compare / Timeline", systemImage: "rectangle.split.2x1").frame(maxWidth: .infinity)
+                    } primaryAction: {
+                        WindowManager.shared.showCompare()
                     }
+                    Button { WindowManager.shared.showCode() } label: { Image(systemName: "chevron.left.forwardslash.chevron.right") }
+                        .help("Code snippet (⌘4)")
                     Button { store.importWithPanel() } label: { Image(systemName: "square.and.arrow.down") }
                         .help("Import images")
                     Button { WindowManager.shared.showSettings() } label: { Image(systemName: "gearshape") }
@@ -88,7 +95,7 @@ struct LibraryView: View {
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                        .id("\(prefix)-\(digits)-\(store.items.count)")
+                        .id("\(prefix)-\(digits)-\(store.libraryItems.count)")
                 }
             }
             .padding(10)
@@ -96,7 +103,7 @@ struct LibraryView: View {
             Divider()
 
             List(selection: $store.selection) {
-                if store.items.isEmpty {
+                if store.libraryItems.isEmpty {
                     Text("No captures yet.\nPress ⌃⇧4 to capture a region.")
                         .foregroundStyle(.secondary)
                         .font(.callout)
@@ -129,7 +136,7 @@ struct LibraryView: View {
 
             Divider()
             HStack {
-                Text("\(store.items.count) captures").font(.caption).foregroundStyle(.secondary)
+                Text("\(store.libraryItems.count) captures").font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button { store.revealInFinder([]) } label: { Image(systemName: "folder") }
                     .buttonStyle(.borderless)
@@ -149,7 +156,7 @@ struct LibraryView: View {
         Button("Use as Comparison BASE") { store.compareBaseID = item.id; WindowManager.shared.showCompare() }
         Button("Use as Comparison CHANGE") { store.compareChangeID = item.id; WindowManager.shared.showCompare() }
         Button("Add to Timeline") {
-            let ordered = store.items.filter { targets.contains($0.id) }.sorted { $0.createdAt < $1.createdAt }
+            let ordered = store.libraryItems.filter { targets.contains($0.id) }.sorted { $0.createdAt < $1.createdAt }
             for i in ordered where !store.timelineIDs.contains(i.id) { store.timelineIDs.append(i.id) }
             WindowManager.shared.showCompare()
         }
@@ -157,7 +164,7 @@ struct LibraryView: View {
         Button("Copy Final Image") { ExportService.copy(item) }
         Button("Export…") { ExportService.export(item) }
         Button("Export Selection with Manifest…") {
-            ExportService.exportBatch(store.items.filter { targets.contains($0.id) })
+            ExportService.exportBatch(store.libraryItems.filter { targets.contains($0.id) })
         }
         Button("Show in Finder") { store.revealInFinder(targets) }
         Divider()
@@ -171,8 +178,8 @@ struct LibraryView: View {
         if store.selection.count == 1, let item = store.item(store.selection.first) {
             EditorView(item: item).id(item.id)
         } else if store.selection.count > 1 {
-            MultiSelectionView(items: store.items.filter { store.selection.contains($0.id) })
-        } else if store.items.isEmpty {
+            MultiSelectionView(items: store.libraryItems.filter { store.selection.contains($0.id) })
+        } else if store.libraryItems.isEmpty {
             EmptyStateView()
         } else {
             HistoryGrid(items: filtered, title: "Capture History")

@@ -263,6 +263,11 @@ struct CaptureBarView: View {
                 }
                 Divider()
                 Button("Open Comparison…") { WindowManager.shared.showCompare() }
+                Button("Compare External Images…") { WindowManager.shared.showCompare(external: true) }
+            }
+
+            BarButton(symbol: "chevron.left.forwardslash.chevron.right", title: "Code", help: "Code snippet (⌘4)") {
+                WindowManager.shared.showCode()
             }
 
             BarButton(symbol: "photo.stack", title: "Library", help: "Open the library") {

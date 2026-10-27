@@ -57,6 +57,8 @@ were not tampered with. SecShot solves that workflow end to end:
 
 ### Editor (non-destructive)
 - Rectangle, ellipse, arrow, line, text and callouts, highlighter, numbered steps, and crop.
+- **Focus spotlight**: dims and blurs everything around an ellipse or rectangle to draw the reader's eye to one area.
+- **Zoom / magnifier**: enlarges a region into a callout with connector lines. *Pixel-perfect* mode enlarges every pixel exactly, so screenshot text stays sharp; *Smooth* mode uses Lanczos resampling.
 - Move and delete annotations, unlimited undo/redo, and single-key tool shortcuts.
 - The original PNG is never modified. Edits are stored separately and flattened on export.
 
@@ -75,9 +77,15 @@ were not tampered with. SecShot solves that workflow end to end:
 - Layouts: **side by side**, **stacked**, **highlighted differences** (pixel diff with boxed regions and a change percentage) and an interactive **before/after slider**.
 - **Timeline** mode chains N captures into a numbered, timestamped attack narrative.
 - Results are saved back to the library as new evidence, following the naming convention.
+- **External Images** tab: drop or choose any images (not taken with SecShot), edit them with the full editor, and build comparisons or timelines from them. They stay out of your evidence library until you save the result or add an image explicitly.
 
 <p align="center">
   <img src="docs/images/05-diff.png" alt="Before/after comparison with highlighted differences" width="820">
+</p>
+
+<p align="center">
+  <img src="docs/images/09-spotlight.png" alt="Focus spotlight around a line, with the rest dimmed and blurred" width="400">
+  <img src="docs/images/10-magnify.png" alt="Zoom callouts enlarging an access key and an IP address" width="400">
 </p>
 
 <details>
@@ -88,6 +96,49 @@ were not tampered with. SecShot solves that workflow end to end:
   <img src="docs/images/07-split.png" alt="Before/after slider export" width="640">
   <img src="docs/images/04-shadow.png" alt="macOS-style shadow decoration" width="640">
 </p>
+</details>
+
+### Code snippets
+Turn code, terminal sessions and raw HTTP traffic into clean, styled images (⌘4).
+- **Syntax highlighting** for HTTP requests/responses, JSON, shell sessions (prompts, commands, flags and output are told apart), Python, JavaScript/TypeScript, C-like languages, SQL and XML/HTML, with auto-detection.
+- **Styles**: 12 built-in themes (Terminal, Hacker Green, Dracula, One Dark, Monokai, Nord, Solarized Dark, GitHub Light and the four Catppuccin flavors: Latte, Frappé, Macchiato, Mocha), 4 window frames (macOS window, terminal, background only, no frame) and gradient, solid or transparent backgrounds.
+- **HTTP security-header analysis**: each header gets a marker (good / weak / informational), and a summary lists issues such as Report-Only or `unsafe-inline` CSPs, short HSTS `max-age`, cookies without `Secure`/`HttpOnly`/`SameSite`, wildcard CORS, software disclosure and missing recommended headers.
+- **Compare** two snippets (e.g. original vs. tampered request) with a line diff: removed lines in red, added lines in green, and the exact changed fragment emphasized (`role=user` → `role=admin`).
+- **Timeline** mode chains N snippets into a numbered attack narrative. Arrows between snippets are optional in both modes.
+- **Redact** (⇧⌘R or right-click) replaces the selected text with a marker such as `[REDACTED]`, configurable in *Settings → Security* or from the window. The marker is highlighted in red in the image, and redacted credentials are no longer flagged by the header analysis.
+- **Themes you can bring and tweak**: import VS Code (`.json`, comments allowed) or TextMate (`.tmTheme`) themes, customize any color with a live preview, and export them as JSON. Custom themes live in `~/Library/Application Support/SecShot/Themes`.
+- Line numbers, highlighted lines, wrapping that keeps header values aligned, and a window title.
+- Saved snippets become regular evidence, so you can redact, annotate, spotlight or zoom them. Pasted code is never written to disk unless you save the image.
+
+<p align="center">
+  <img src="docs/images/11-code-http.png" alt="HTTP response with syntax highlighting and security header analysis" width="560">
+  <img src="docs/images/12-code-terminal.png" alt="Terminal session rendered as a terminal window" width="400">
+</p>
+<p align="center">
+  <img src="docs/images/13-code-compare.png" alt="Original vs tampered request with the changed value highlighted" width="820">
+</p>
+
+<details>
+<summary><b>Code timeline example</b></summary>
+<p align="center"><img src="docs/images/14-code-timeline.png" alt="Three-step code timeline" width="560"></p>
+</details>
+
+<details>
+<summary><b>Theme file format</b></summary>
+
+```json
+{
+  "name": "My Theme",
+  "type": "dark",
+  "colors": {
+    "background": "#1E1E2E", "foreground": "#CDD6F4", "comment": "#6C7086",
+    "keyword": "#CBA6F7", "string": "#A6E3A1", "number": "#FAB387",
+    "function": "#89B4FA", "type": "#F9E2AF", "attribute": "#94E2D5",
+    "variable": "#F38BA8", "headerName": "#74C7EC", "prompt": "#A6E3A1",
+    "output": "#A6ADC8", "lineNumber": "#45475A"
+  }
+}
+```
 </details>
 
 ### Output
@@ -134,7 +185,11 @@ shasum -a 256 -c SHA256SUMS.txt
 | ⌃⇧5 | Capture a window / app |
 | ⌃⇧3 | Capture the full screen |
 | ⌃⇧2 | Show / hide the floating capture bar |
+| ⌃⇧6 | Open Code Snippet (from any app) |
+| ⌃⇧7 | Open Comparison & Timeline (from any app) |
 | ⌘1 / ⌘2 | Open the Library / Comparison window |
+| ⌘3 | Compare external images |
+| ⌘4 | Code snippet |
 | ⌘, | Settings |
 
 ### Editor shortcuts
@@ -146,9 +201,20 @@ shasum -a 256 -c SHA256SUMS.txt
 | `A` | Arrow | `B` | Hardened blur |
 | `T` | Text | `X` | Solid redaction |
 | `H` | Highlighter | `C` | Crop |
+| `S` | Focus spotlight | `Z` | Zoom / magnifier |
 | `⌫` | Delete selection | `⌘Z` / `⇧⌘Z` | Undo / Redo |
 
 `⌘E` exports and `⇧⌘C` copies the final image.
+
+### Code Snippet shortcuts
+
+| Shortcut | Action |
+|---|---|
+| ⌥⌘1 / ⌥⌘2 / ⌥⌘3 | Single / Compare / Timeline mode |
+| ⇧⌘R | Redact the selected text (also in the right-click menu) |
+| ⇧⌘C | Copy the image to the clipboard |
+| ⌘E | Export the image |
+| ⌘S | Save as evidence |
 
 ### Typical workflow
 
@@ -161,7 +227,8 @@ shasum -a 256 -c SHA256SUMS.txt
 ### Launch at login
 
 Enable *Settings → General → Open SecShot at login*. At login, SecShot starts in the background
-with only the capture bar (if enabled), the menu bar icon and the hotkeys, and no windows.
+with only the capture bar (if enabled), the menu bar icon and the hotkeys, and no windows. Click
+its Dock icon to open the library.
 
 ## Security model
 
@@ -231,6 +298,10 @@ Sources/SecShot/
 ├── LibraryStore.swift      Persistence, history and naming convention
 ├── Renderer.swift          Flattening, redaction, shadow, composites, diff
 ├── SensitiveDetector.swift OCR + secret patterns
+├── CodeHighlighter.swift   Syntax highlighting for code, shell and HTTP
+├── CodeShot.swift          Code themes, header analysis and renderer
+├── CodeCompare.swift       Code diff, comparison and timeline
+├── CodeThemeLibrary.swift  Custom / imported themes
 ├── ExportService.swift     Metadata-free export, clipboard, manifest
 ├── HotKeys.swift           Global hotkeys (Carbon)
 ├── LoginItem.swift         Background launch at login
@@ -305,18 +376,19 @@ tccutil reset ScreenCapture local.secshot.app
 
 Using a stable signature (see [Releasing](#releasing)) prevents this from happening on updates.
 
+**SecShot does not open at login.** Earlier versions used a background login agent that macOS
+refuses to start unless the app is signed with an Apple Team ID ("Launch Constraint Violation" in
+crash reports). Current versions migrate automatically: open SecShot once and check that
+*Settings → General → Open SecShot at login* is on.
+
 **Captures only show the wallpaper.** This is the same cause: the permission is not active for
 the running build. Follow the steps above.
 
 ## Roadmap
 
-- Report export to DOCX / PDF templates
-- Scrolling capture and screen recording (video / GIF)
-- Magnifier callouts and curved arrows
-- Per-engagement projects with encrypted-at-rest libraries
-- RFC 3161 trusted timestamps for evidence
-- Configurable hotkeys
-- Windows and Linux ports
+Planned ideas — Burp/HAR import, finding templates with CVSS, reporting-platform integrations,
+automatic redaction inside code, retest mode and more — are tracked in [ROADMAP.md](ROADMAP.md).
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 
 ## Contributing
 

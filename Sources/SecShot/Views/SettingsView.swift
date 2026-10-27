@@ -23,6 +23,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.defaultRedaction) private var redaction = AnnotationKind.pixelate.rawValue
     @AppStorage(Prefs.captureBar) private var captureBar = true
     @ObservedObject private var barState = CaptureBar.shared.state
+    @AppStorage(Prefs.redactionText) private var redactionText = "[REDACTED]"
     @ViewState private var launchAtLogin = LoginItem.isEnabled
     @ViewState private var loginError: String?
     @ViewState private var screenAccess = ScreenPermission.isGranted
@@ -92,7 +93,8 @@ struct SettingsView: View {
                 Toggle("Copy to clipboard after capturing", isOn: $copyAfter)
                 Toggle("Shutter sound", isOn: $sound)
                 LabeledContent("Global hotkeys") {
-                    Text("⌃⇧4 region · ⌃⇧5 window · ⌃⇧3 screen · ⌃⇧2 bar").font(.callout)
+                    Text("⌃⇧4 region · ⌃⇧5 window · ⌃⇧3 screen · ⌃⇧2 bar · ⌃⇧6 code · ⌃⇧7 compare / timeline")
+                        .font(.callout).multilineTextAlignment(.trailing)
                 }
                 Button("Open Screen Recording Permissions…") { ScreenPermission.openSettings() }
             }
@@ -115,6 +117,9 @@ struct SettingsView: View {
             }
 
             Section("Security") {
+                TextField("Redaction text", text: $redactionText, prompt: Text("[REDACTED]"))
+                Text("Used by the Redact button (⇧⌘R) in Code Snippet. Selected text is replaced with it and highlighted in red in the image.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Picker("Automatic redaction", selection: $redaction) {
                     Text("Pixelate").tag(AnnotationKind.pixelate.rawValue)
                     Text("Hardened blur").tag(AnnotationKind.blur.rawValue)

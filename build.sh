@@ -8,7 +8,7 @@
 # Builds SecShot and produces build/SecShot.app.
 #
 # Optional environment variables:
-#   VERSION=1.2.0        CFBundleShortVersionString (default 0.1.0)
+#   VERSION=1.2.0        CFBundleShortVersionString (default 0.2.0)
 #   BUILD_NUMBER=42      CFBundleVersion (default 1)
 #   UNIVERSAL=1          universal arm64 + x86_64 binary (requires Xcode)
 #   SIGN_IDENTITY="..."  signing identity. Defaults to "SecShot Local Signing" if present, otherwise ad-hoc.
@@ -16,7 +16,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-VERSION=${VERSION:-0.1.0}
+VERSION=${VERSION:-0.2.0}
 BUILD_NUMBER=${BUILD_NUMBER:-1}
 BUNDLE_ID=local.secshot.app
 
@@ -29,7 +29,7 @@ BIN="$(swift build -c release "${ARCH_FLAGS[@]}" --show-bin-path)/SecShot"
 
 APP=build/SecShot.app
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Library/LaunchAgents"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/SecShot"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -55,7 +55,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Login agent: launches the app in the background (no windows).
+# Legacy login agent. It is NOT registered by current versions (launchd refuses agents that
+# lack an Apple Team ID); the plist is kept only so older registrations can be found and removed.
+mkdir -p "$APP/Contents/Library/LaunchAgents"
 cat > "$APP/Contents/Library/LaunchAgents/${BUNDLE_ID}.login.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -72,7 +74,6 @@ cat > "$APP/Contents/Library/LaunchAgents/${BUNDLE_ID}.login.plist" <<PLIST
     <key>LimitLoadToSessionType</key><string>Aqua</string>
     <key>RunAtLoad</key><true/>
     <key>KeepAlive</key><false/>
-    <key>ProcessType</key><string>Interactive</string>
 </dict>
 </plist>
 PLIST

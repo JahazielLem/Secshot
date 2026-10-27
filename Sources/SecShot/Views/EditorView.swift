@@ -56,7 +56,7 @@ struct EditorToolbar: View {
                 .padding(3)
                 .background(RoundedRectangle(cornerRadius: 6).fill(vm.tool == t ? Color.accentColor.opacity(0.28) : .clear))
                 .help(t.label)
-                if t == .select || t == .step || t == .redact {
+                if t == .select || t == .step || t == .magnify || t == .redact {
                     Divider().frame(height: 20).padding(.horizontal, 2)
                 }
             }
@@ -153,6 +153,8 @@ struct EditorCanvas: View {
                 case "c": vm.tool = .crop
                 case "h": vm.tool = .highlight
                 case "n": vm.tool = .step
+                case "s": vm.tool = .spotlight
+                case "z": vm.tool = .magnify
                 default: return .ignored
                 }
                 return .handled
@@ -182,7 +184,7 @@ struct EditorCanvas: View {
                         let hit = vm.hitTest(s)
                         vm.select(hit)
                         moving = hit != nil
-                        if moving { vm.beginMove() }
+                        if moving { vm.beginMove(at: s) }
                     }
                     if moving { vm.move(by: CGSize(width: p.x - s.x, height: p.y - s.y)) }
                 case .crop:
@@ -250,13 +252,34 @@ struct EditorCanvas: View {
                 ctx.fill(Path(r), with: .color(d.kind == .redact ? .black.opacity(0.85) : .gray.opacity(0.6)))
                 ctx.stroke(Path(r), with: .color(.orange), style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
                 ctx.draw(Text(d.kind.label).font(.caption.bold()).foregroundColor(.white), at: CGPoint(x: r.midX, y: r.midY))
+            case .spotlight:
+                let shape = d.spotlightShape == "rectangle"
+                    ? Path(roundedRect: r, cornerRadius: min(r.width, r.height) * 0.08)
+                    : Path(ellipseIn: r)
+                var dimmed = Path(imageRect)
+                dimmed.addPath(shape)
+                ctx.fill(dimmed, with: .color(.black.opacity(d.spotlightDim)), style: FillStyle(eoFill: true))
+                ctx.stroke(shape, with: .color(.white), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+            case .magnify:
+                ctx.stroke(Path(r), with: .color(color), style: StrokeStyle(lineWidth: max(1.5, lw * 0.6), dash: [6, 4]))
+                let frame = l.toView(vm.magnifierFrame(d))
+                ctx.stroke(Path(frame), with: .color(color.opacity(0.7)), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+                ctx.draw(Text(String(format: "%.1f×", d.zoomFactor)).font(.caption.bold()).foregroundColor(color),
+                         at: CGPoint(x: frame.midX, y: frame.midY))
             default: break
             }
         }
 
         if let sel = vm.selected {
-            let r = l.toView(Renderer.bounds(sel)).insetBy(dx: -4, dy: -4)
-            ctx.stroke(Path(r), with: .color(.accentColor), style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+            let style = StrokeStyle(lineWidth: 1.5, dash: [5, 3])
+            if sel.kind == .magnify {
+                // Two handles: the source region and the enlarged copy can be dragged separately.
+                ctx.stroke(Path(l.toView(sel.rect).insetBy(dx: -4, dy: -4)), with: .color(.accentColor), style: style)
+                ctx.stroke(Path(l.toView(vm.magnifierFrame(sel)).insetBy(dx: -4, dy: -4)), with: .color(.accentColor), style: style)
+            } else {
+                let r = l.toView(Renderer.bounds(sel, imageSize: vm.imageSize)).insetBy(dx: -4, dy: -4)
+                ctx.stroke(Path(r), with: .color(.accentColor), style: style)
+            }
         }
     }
 }
@@ -371,6 +394,48 @@ struct EditorInspector: View {
                     }
                 } label: { Label("Security", systemImage: "lock.shield") }
 
+                if vm.tool == .spotlight || vm.selected?.kind == .spotlight {
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Picker("Shape", selection: $vm.spotlightShape) {
+                                Label("Ellipse", systemImage: "circle").tag("ellipse")
+                                Label("Rectangle", systemImage: "rectangle").tag("rectangle")
+                            }
+                            .pickerStyle(.segmented)
+                            HStack {
+                                Text("Darken").frame(width: 50, alignment: .leading)
+                                Slider(value: $vm.spotlightDim, in: 0...0.9)
+                            }
+                            HStack {
+                                Text("Blur").frame(width: 50, alignment: .leading)
+                                Slider(value: $vm.spotlightBlur, in: 0...1)
+                            }
+                            Toggle("Outline in the current color", isOn: $vm.spotlightOutline)
+                            Text("Everything outside the shape is darkened and blurred to draw attention to it. Redactions stay intact.")
+                                .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    } label: { Label("Focus Spotlight", systemImage: "circle.dashed.inset.filled") }
+                }
+
+                if vm.tool == .magnify || vm.selected?.kind == .magnify {
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Zoom")
+                                Slider(value: $vm.zoomFactor, in: 1.5...6, step: 0.5)
+                                Text(String(format: "%.1f×", vm.zoomFactor)).monospacedDigit().frame(width: 38)
+                            }
+                            Picker("Scaling", selection: $vm.smoothZoom) {
+                                Text("Pixel-perfect").tag(false)
+                                Text("Smooth").tag(true)
+                            }
+                            .pickerStyle(.segmented)
+                            Text("Pixel-perfect enlarges every pixel exactly, so screenshot text stays sharp. Smooth uses Lanczos resampling, better for photos. Drag the source or the enlarged copy separately with the Select tool.")
+                                .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    } label: { Label("Zoom", systemImage: "plus.magnifyingglass") }
+                }
+
                 if let sel = vm.selected {
                     GroupBox {
                         VStack(alignment: .leading, spacing: 8) {
@@ -419,7 +484,7 @@ struct EditorInspector: View {
                     }
                 } label: { Label("Output", systemImage: "square.and.arrow.up.on.square") }
 
-                Text("Shortcuts: V select · R rectangle · A arrow · T text · H highlight · N step · P pixelate · B blur · X redact · C crop · ⌫ delete")
+                Text("Shortcuts: V select · R rectangle · A arrow · T text · H highlight · N step · S spotlight · Z zoom · P pixelate · B blur · X redact · C crop · ⌫ delete")
                     .font(.caption2).foregroundStyle(.tertiary)
             }
             .padding(12)

@@ -32,6 +32,10 @@ struct SecShotApp: App {
                     .keyboardShortcut("1", modifiers: .command)
                 Button("Comparison / Timeline") { WindowManager.shared.showCompare() }
                     .keyboardShortcut("2", modifiers: .command)
+                Button("Compare External Images…") { WindowManager.shared.showCompare(external: true) }
+                    .keyboardShortcut("3", modifiers: .command)
+                Button("Code Snippet…") { WindowManager.shared.showCode() }
+                    .keyboardShortcut("4", modifiers: .command)
                 Divider()
                 Button("Import Images…") { LibraryStore.shared.importWithPanel() }
                     .keyboardShortcut("o", modifiers: .command)
@@ -55,9 +59,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var barMenuItem: NSMenuItem?
 
-    /// `--background` is passed by the login agent. The app starts without windows: only the
-    /// capture bar (if enabled), the menu bar icon and the global hotkeys.
-    private let launchedInBackground = CommandLine.arguments.contains("--background")
+    /// When SecShot is opened at login it starts without windows: only the capture bar
+    /// (if enabled), the menu bar icon and the global hotkeys.
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Never restore windows from the previous session.
@@ -75,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusItem()
         HotKeyManager.shared.setup()
         LoginItem.migrateLegacyRegistration()
-        if !launchedInBackground {
+        if !LoginItem.launchedAtLogin() {
             WindowManager.shared.showLibrary()
             DispatchQueue.main.async { ScreenPermission.checkAtLaunch() }
         }
@@ -115,7 +118,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         add("Capture Bar   ⌃⇧2", #selector(toggleBar))
         barMenuItem = menu.items.last
         add("Library…", #selector(openLibrary))
-        add("Comparison / Timeline…", #selector(openCompare))
+        add("Comparison / Timeline…   ⌃⇧7", #selector(openCompare))
+        add("Compare External Images…", #selector(openCompareExternal))
+        add("Code Snippet…   ⌃⇧6", #selector(openCode))
         add("Settings…", #selector(openSettings))
         menu.addItem(.separator())
         add("Quit SecShot", #selector(quit), "q")
@@ -142,6 +147,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleBar() { CaptureBar.shared.toggle() }
     @objc private func openLibrary() { WindowManager.shared.showLibrary() }
     @objc private func openCompare() { WindowManager.shared.showCompare() }
+    @objc private func openCompareExternal() { WindowManager.shared.showCompare(external: true) }
+    @objc private func openCode() { WindowManager.shared.showCode() }
     @objc private func openSettings() { WindowManager.shared.showSettings() }
     @objc private func quit() { NSApp.terminate(nil) }
 }

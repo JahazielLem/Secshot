@@ -28,6 +28,7 @@ enum Prefs {
     static let captureBarTimer = "captureBarTimer"
     static let captureBarX = "captureBarX"
     static let captureBarY = "captureBarY"
+    static let redactionText = "redactionText"
 
     static func register() {
         UserDefaults.standard.register(defaults: [
@@ -47,6 +48,7 @@ enum Prefs {
             captureBar: true,
             captureBarPosition: "bottom",
             captureBarTimer: 0,
+            redactionText: "[REDACTED]",
         ])
     }
 }
@@ -81,7 +83,7 @@ struct RGBAColor: Codable, Equatable {
 // MARK: - Annotations
 
 enum AnnotationKind: String, Codable, CaseIterable {
-    case rectangle, ellipse, arrow, line, text, highlight, step, pixelate, blur, redact
+    case rectangle, ellipse, arrow, line, text, highlight, step, pixelate, blur, redact, spotlight, magnify
 
     var isRedaction: Bool { self == .pixelate || self == .blur || self == .redact }
 
@@ -97,6 +99,8 @@ enum AnnotationKind: String, Codable, CaseIterable {
         case .pixelate: return "Pixelate"
         case .blur: return "Hardened blur"
         case .redact: return "Solid redaction"
+        case .spotlight: return "Focus spotlight"
+        case .magnify: return "Zoom / magnifier"
         }
     }
 }
@@ -114,6 +118,34 @@ struct Annotation: Codable, Identifiable, Equatable {
     var number: Int = 0
     var filled: Bool = false
 
+    // Optional so libraries saved by earlier versions keep decoding.
+    /// Spotlight: "ellipse" (default) or "rectangle".
+    var shape: String?
+    /// Spotlight: how dark the surroundings become (0–0.9).
+    var dim: Double?
+    /// Spotlight: blur strength applied to the surroundings (0–1).
+    var blurAmount: Double?
+    /// Magnifier: top-left corner of the enlarged copy, in image pixels.
+    var dest: CGPoint?
+    /// Magnifier: enlargement factor.
+    var zoom: Double?
+    /// Magnifier: `true` = smooth (Lanczos), `false` = pixel-perfect (nearest neighbor).
+    var smooth: Bool?
+
+    var spotlightShape: String { shape ?? "ellipse" }
+    var spotlightDim: Double { dim ?? 0.55 }
+    var spotlightBlur: Double { blurAmount ?? 0.5 }
+    var zoomFactor: Double { max(1, zoom ?? 2) }
+    var smoothZoom: Bool { smooth ?? false }
+
+    /// Magnifier: where the enlarged copy is drawn.
+    var magnifiedRect: CGRect {
+        let r = rect
+        let size = CGSize(width: r.width * zoomFactor, height: r.height * zoomFactor)
+        let origin = dest ?? CGPoint(x: r.maxX + 24, y: r.minY)
+        return CGRect(origin: origin, size: size)
+    }
+
     var rect: CGRect {
         CGRect(x: min(start.x, end.x), y: min(start.y, end.y),
                width: abs(end.x - start.x), height: abs(end.y - start.y))
@@ -126,7 +158,7 @@ struct Annotation: Codable, Identifiable, Equatable {
 }
 
 enum EditorTool: String, CaseIterable, Identifiable {
-    case select, rectangle, ellipse, arrow, line, text, highlight, step, pixelate, blur, redact, crop
+    case select, rectangle, ellipse, arrow, line, text, highlight, step, spotlight, magnify, pixelate, blur, redact, crop
 
     var id: String { rawValue }
     var kind: AnnotationKind? { AnnotationKind(rawValue: rawValue) }
@@ -144,6 +176,8 @@ enum EditorTool: String, CaseIterable, Identifiable {
         case .pixelate: return "squareshape.split.3x3"
         case .blur: return "drop.halffull"
         case .redact: return "rectangle.fill"
+        case .spotlight: return "circle.dashed.inset.filled"
+        case .magnify: return "plus.magnifyingglass"
         case .crop: return "crop"
         }
     }
@@ -151,6 +185,8 @@ enum EditorTool: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .select: return "Select / move (V)"
+        case .spotlight: return "Focus spotlight: dims and blurs everything around a shape (S)"
+        case .magnify: return "Zoom: enlarges a region into a magnified callout (Z)"
         case .crop: return "Crop (C)"
         default: return kind?.label ?? rawValue
         }
@@ -172,6 +208,11 @@ struct CaptureItem: Codable, Identifiable, Equatable {
     var annotations: [Annotation] = []
     var crop: CGRect?
     var notes: String = ""
+    /// `true` for external images added to the comparison workspace. They are not evidence:
+    /// they are hidden from the library and do not consume the naming convention.
+    var workspace: Bool?
+
+    var isWorkspace: Bool { workspace ?? false }
 
     var modeLabel: String {
         switch mode {
@@ -182,6 +223,8 @@ struct CaptureItem: Codable, Identifiable, Equatable {
         case "timeline": return "Timeline"
         case "import": return "Imported"
         case "derived": return "Derived"
+        case "external": return "External image"
+        case "code": return "Code snippet"
         default: return mode
         }
     }

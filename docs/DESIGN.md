@@ -55,22 +55,22 @@ Sources/SecShot/
 ├── SensitiveDetector.swift OCR + patterns (JWT, AWS keys, passwords, cookies, IP, email…)
 ├── ExportService.swift     Metadata-free PNG/JPEG, clipboard, batch + manifest
 ├── Hashing.swift           SHA-256
-├── SelfTest.swift          --selftest and --make-icon command-line utilities
+├── ScreenPermission.swift  Screen Recording permission checks and repair
+├── CodeHighlighter.swift   Regex-based syntax highlighting (HTTP, JSON, shell, code)
+├── CodeShot.swift          Code themes, frames, HTTP security-header analysis, renderer
+├── CodeCompare.swift       Line diff, code comparison and timeline composition
+├── CodeThemeLibrary.swift  Custom themes, VS Code / TextMate import, JSON export
+├── SelfTest.swift          Command-line utilities (--selftest, --codeshot, …)
 └── Views/
     ├── LibraryView.swift   History, gallery, multi-selection, context menu
     ├── EditorModel.swift   Editor state, undo/redo, detection
     ├── EditorView.swift    Canvas, tools, inspector
     ├── CompareView.swift   Comparison and timeline
+    ├── CodeShotView.swift  Code Snippet window and theme editor
+    ├── CodeTextEditor.swift Native code editor with redaction
     └── SettingsView.swift  Settings
 ```
 
 ## 4. Roadmap
 
-- Report export to DOCX / PDF templates
-- Scrolling capture and screen recording (video / GIF)
-- Magnifier callouts and curved arrows
-- Per-engagement projects with encrypted-at-rest libraries
-- RFC 3161 trusted timestamps for evidence
-- Configurable hotkeys
-- Cross-platform port (Windows / Linux), likely with a shared Rust core and a Tauri UI.
-  Wayland capture and global hotkeys need the XDG desktop portals.
+The roadmap lives in [ROADMAP.md](../ROADMAP.md).

@@ -5,11 +5,16 @@
 // Made by AI
 
 import AppKit
+import ServiceManagement
 
 /// Command-line utilities:
 ///   SecShot --selftest <folder>    renders sample images with the rendering engine
 ///   SecShot --make-icon <iconset>  generates the app iconset
 ///   SecShot --permission-status <file>  writes whether Screen Recording access is granted
+///   SecShot --login-status <file>       writes the launch-at-login registration status
+///   SecShot --codeshot <in> <out.png> [theme] [frame] [background]  renders a code snippet
+///   SecShot --codecompare <before> <after> <out.png> [theme]         before/after diff of two snippets
+///   SecShot --codetimeline <out.png> <step files…>                   numbered timeline of snippets
 enum CommandLineTools {
     static func runIfRequested() {
         let args = CommandLine.arguments
@@ -22,6 +27,66 @@ enum CommandLineTools {
             // SecShot (not the terminal) is the process macOS evaluates.
             let status = "screenCapture=\(CGPreflightScreenCaptureAccess())\n"
             try? status.write(toFile: args[i + 1], atomically: true, encoding: .utf8)
+            exit(0)
+        }
+        if let i = args.firstIndex(of: "--login-status"), i + 1 < args.count {
+            // Diagnostics for launch at login (run through `open -a SecShot --args …`).
+            func name(_ s: SMAppService.Status) -> String {
+                switch s {
+                case .notRegistered: return "notRegistered"
+                case .enabled: return "enabled"
+                case .requiresApproval: return "requiresApproval"
+                case .notFound: return "notFound"
+                @unknown default: return "unknown"
+                }
+            }
+            let agent = SMAppService.agent(plistName: "local.secshot.app.login.plist")
+            let status = "mainApp=\(name(SMAppService.mainApp.status)) legacyAgent=\(name(agent.status))\n"
+            try? status.write(toFile: args[i + 1], atomically: true, encoding: .utf8)
+            exit(0)
+        }
+        if let i = args.firstIndex(of: "--codeshot"), i + 2 < args.count {
+            // SecShot --codeshot <input.txt> <output.png> [theme] [frame] [background]
+            guard let text = try? String(contentsOfFile: args[i + 1], encoding: .utf8) else { exit(1) }
+            var o = CodeShotOptions(code: text)
+            if i + 3 < args.count {
+                // A theme name, or a path to a SecShot / VS Code / TextMate theme file.
+                let arg = args[i + 3]
+                if FileManager.default.fileExists(atPath: arg) {
+                    do { o.theme = try CodeThemeLibrary.parseTheme(at: URL(fileURLWithPath: arg)) }
+                    catch { print("✗ theme: \(error.localizedDescription)"); exit(1) }
+                } else {
+                    o.theme = CodeTheme.named(arg)
+                }
+            }
+            if i + 4 < args.count, let f = CodeFrame(rawValue: args[i + 4]) { o.frame = f }
+            if i + 5 < args.count, let b = CodeBackground(rawValue: args[i + 5]) { o.background = b }
+            guard let out = CodeShotRenderer.render(o) else { exit(1) }
+            write(out.image, URL(fileURLWithPath: args[i + 2]))
+            for f in out.findings { print("  [\(f.level)] \(f.header): \(f.message)") }
+            exit(0)
+        }
+        if let i = args.firstIndex(of: "--codecompare"), i + 3 < args.count {
+            // SecShot --codecompare <before.txt> <after.txt> <output.png> [theme]
+            guard let a = try? String(contentsOfFile: args[i + 1], encoding: .utf8),
+                  let b = try? String(contentsOfFile: args[i + 2], encoding: .utf8) else { exit(1) }
+            var o = CodeShotOptions(code: a)
+            if i + 4 < args.count { o.theme = CodeTheme.named(args[i + 4]) }
+            let r = CodeShotRenderer.renderComparison(base: a, change: b, baseLabel: "BEFORE", changeLabel: "AFTER",
+                                                      options: o, horizontal: true, diff: true, arrows: true)
+            write(r.image, URL(fileURLWithPath: args[i + 3]))
+            print("  \(r.summary)")
+            exit(0)
+        }
+        if let i = args.firstIndex(of: "--codetimeline"), i + 2 < args.count {
+            // SecShot --codetimeline <output.png> <step1.txt> <step2.txt> …
+            let steps = args[(i + 2)...].compactMap { path -> (title: String, code: String)? in
+                guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+                return (URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent, text)
+            }
+            var o = CodeShotOptions(code: "")
+            o.background = .midnight
+            write(CodeShotRenderer.renderTimeline(steps: steps, options: o, horizontal: false), URL(fileURLWithPath: args[i + 1]))
             exit(0)
         }
         if let i = args.firstIndex(of: "--make-icon"), i + 1 < args.count {
@@ -109,6 +174,44 @@ enum CommandLineTools {
                                horizontal: false, connectors: true), dir.appendingPathComponent("06-timeline.png"))
         write(Renderer.split(base: base, change: change, fraction: 0.5, baseLabel: "BEFORE", changeLabel: "AFTER"),
               dir.appendingPathComponent("07-split.png"))
+
+        // Focus spotlight around the credentials line; the password (outside the spotlight) stays redacted.
+        var spot = ann(.spotlight, 20, 236, 920, 300)
+        spot.shape = "rectangle"
+        spot.filled = true
+        let focus = [ann(.redact, 200, 300, 520, 340), spot]
+        write(Renderer.render(base, annotations: focus, crop: nil), dir.appendingPathComponent("09-spotlight.png"))
+
+        // Magnifier: enlarge the AWS key 2.5× (pixel-perfect) and the host IP 3× (smooth).
+        var zoomKey = ann(.magnify, 400, 352, 790, 392)
+        zoomKey.zoom = 2.5
+        zoomKey.dest = CGPoint(x: 560, y: 470)
+        var zoomIP = ann(.magnify, 640, 245, 860, 290)
+        zoomIP.zoom = 3
+        zoomIP.smooth = true
+        zoomIP.dest = CGPoint(x: 960, y: 40)
+        write(Renderer.render(base, annotations: [zoomKey, zoomIP], crop: nil), dir.appendingPathComponent("10-magnify.png"))
+
+        // Code snippets: HTTP response with security-header analysis, and a terminal session.
+        var http = CodeShotOptions(code: CodeSamples.httpResponse)
+        http.theme = CodeTheme.named("Dracula"); http.background = .ocean
+        write(CodeShotRenderer.render(http)?.image, dir.appendingPathComponent("11-code-http.png"))
+        var term = CodeShotOptions(code: CodeSamples.shell)
+        term.theme = CodeTheme.named("Terminal"); term.frame = .terminal; term.background = .midnight; term.highlightLines = "6"
+        write(CodeShotRenderer.render(term)?.image, dir.appendingPathComponent("12-code-terminal.png"))
+
+        // Code comparison with a line diff, and a code timeline.
+        var cmp = CodeShotOptions(code: "")
+        cmp.theme = CodeTheme.named("Catppuccin Mocha"); cmp.background = .candy
+        let compared = CodeShotRenderer.renderComparison(base: CodeSamples.compareBefore, change: CodeSamples.compareAfter,
+                                                         baseLabel: "ORIGINAL REQUEST", changeLabel: "TAMPERED REQUEST",
+                                                         options: cmp, horizontal: true, diff: true)
+        write(compared.image, dir.appendingPathComponent("13-code-compare.png"))
+        print("  compare: \(compared.summary)")
+        var tl = CodeShotOptions(code: "")
+        tl.theme = CodeTheme.named("Catppuccin Macchiato"); tl.background = .midnight
+        write(CodeShotRenderer.renderTimeline(steps: CodeSamples.timelineSteps.map { ($0.title, $0.code) }, options: tl, horizontal: false),
+              dir.appendingPathComponent("14-code-timeline.png"))
 
         let sem = DispatchSemaphore(value: 0)
         Task.detached {

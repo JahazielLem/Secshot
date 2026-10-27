@@ -65,7 +65,22 @@ enum Renderer {
             }
         }
 
-        // 2) Shapes and text.
+        // 2) Focus spotlights. They work on the already-redacted image, so a redaction in the
+        //    dimmed surroundings can never be undone by the blur.
+        let spots = annotations.filter { $0.kind == .spotlight && $0.rect.width > 4 && $0.rect.height > 4 }
+        if !spots.isEmpty, let current = ctx.makeImage(), let lit = applySpotlights(current, spots) {
+            ctx.saveGState()
+            ctx.setBlendMode(.copy)
+            ctx.draw(lit, in: full)
+            ctx.restoreGState()
+        }
+
+        // 3) Magnifiers (also from the redacted image, so secrets are never enlarged).
+        for m in annotations where m.kind == .magnify {
+            drawMagnifier(m, in: ctx, size: CGSize(width: w, height: h))
+        }
+
+        // 4) Shapes and text.
         withFlipped(ctx, height: CGFloat(h)) {
             for a in annotations where !a.kind.isRedaction { draw(a, in: ctx) }
         }
@@ -101,6 +116,180 @@ enum Renderer {
         return ciContext.createCGImage(out, from: rect)
     }
 
+    // MARK: - Focus spotlight
+
+    /// Keeps the spotlight shapes untouched and blurs + darkens everything else, with a soft edge.
+    static func applySpotlights(_ img: CGImage, _ spots: [Annotation]) -> CGImage? {
+        let W = img.width, H = img.height
+        let extent = CGRect(x: 0, y: 0, width: W, height: H)
+        let ref = CGFloat(max(W, H))
+        let current = CIImage(cgImage: img)
+
+        let dim = CGFloat(min(0.9, max(0, spots.map(\.spotlightDim).max() ?? 0.55)))
+        let blur = CGFloat(spots.map(\.spotlightBlur).max() ?? 0.5)
+        var surroundings = current
+        if blur > 0.01 {
+            surroundings = current.clampedToExtent()
+                .applyingGaussianBlur(sigma: Double(ref * 0.012 * blur))
+                .cropped(to: extent)
+        }
+        let k = 1 - dim
+        surroundings = surroundings.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: k, y: 0, z: 0, w: 0),
+            "inputGVector": CIVector(x: 0, y: k, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0, z: k, w: 0),
+        ])
+
+        // Mask: white shapes on black (Core Graphics uses a bottom-left origin here).
+        guard let mctx = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0,
+                                   space: CGColorSpaceCreateDeviceGray(),
+                                   bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+        mctx.setFillColor(CGColor(gray: 0, alpha: 1))
+        mctx.fill(extent)
+        mctx.setFillColor(CGColor(gray: 1, alpha: 1))
+        for s in spots {
+            let r = s.rect
+            let cg = CGRect(x: r.minX, y: CGFloat(H) - r.maxY, width: r.width, height: r.height)
+            if s.spotlightShape == "rectangle" {
+                let radius = min(r.width, r.height) * 0.08
+                mctx.addPath(CGPath(roundedRect: cg, cornerWidth: radius, cornerHeight: radius, transform: nil))
+            } else {
+                mctx.addEllipse(in: cg)
+            }
+            mctx.fillPath()
+        }
+        guard let maskCG = mctx.makeImage() else { return nil }
+        let mask = CIImage(cgImage: maskCG).clampedToExtent()
+            .applyingGaussianBlur(sigma: Double(ref * 0.006))
+            .cropped(to: extent)
+
+        let out = current.applyingFilter("CIBlendWithMask", parameters: [
+            kCIInputBackgroundImageKey: surroundings,
+            kCIInputMaskImageKey: mask,
+        ])
+        return ciContext.createCGImage(out, from: extent)
+    }
+
+    /// Outline drawn around a spotlight when "Outline" is enabled.
+    static func strokeSpotlight(_ a: Annotation, in ctx: CGContext) {
+        guard a.filled else { return }
+        ctx.setStrokeColor(a.color.cgColor)
+        ctx.setLineWidth(max(2, a.lineWidth * 0.6))
+        if a.spotlightShape == "rectangle" {
+            let radius = min(a.rect.width, a.rect.height) * 0.08
+            ctx.addPath(CGPath(roundedRect: a.rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+            ctx.strokePath()
+        } else {
+            ctx.strokeEllipse(in: a.rect)
+        }
+    }
+
+    // MARK: - Magnifier
+
+    /// Enlarges `source` by `factor`. Pixel-perfect mode keeps every source pixel as a crisp
+    /// block (ideal for screenshots and text); smooth mode uses Lanczos resampling.
+    static func enlarge(_ source: CGImage, factor: CGFloat, smooth: Bool) -> CGImage? {
+        let w = Int((CGFloat(source.width) * factor).rounded())
+        let h = Int((CGFloat(source.height) * factor).rounded())
+        guard w > 0, h > 0 else { return nil }
+        if smooth {
+            let f = CIFilter.lanczosScaleTransform()
+            f.inputImage = CIImage(cgImage: source)
+            f.scale = Float(factor)
+            f.aspectRatio = 1
+            guard let out = f.outputImage else { return nil }
+            let r = CGRect(x: 0, y: 0, width: w, height: h)
+            return ciContext.createCGImage(out.cropped(to: r), from: r)
+        }
+        guard let ctx = makeContext(width: w, height: h) else { return nil }
+        ctx.interpolationQuality = .none
+        ctx.draw(source, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return ctx.makeImage()
+    }
+
+    /// Effective zoom and frame of the enlarged copy, kept fully inside the image. The zoom is
+    /// only reduced when the enlarged copy would not fit at all.
+    static func magnifierFrame(_ m: Annotation, imageSize: CGSize) -> (factor: CGFloat, rect: CGRect) {
+        let src = m.rect
+        guard src.width > 0, src.height > 0 else { return (1, m.magnifiedRect) }
+        let margin = CGFloat(max(4, m.lineWidth * 1.5))   // room for the border
+        let room = CGSize(width: max(1, imageSize.width - margin * 2), height: max(1, imageSize.height - margin * 2))
+        let factor = min(CGFloat(m.zoomFactor), room.width / src.width, room.height / src.height)
+        let size = CGSize(width: src.width * factor, height: src.height * factor)
+        var origin = m.dest ?? CGPoint(x: src.maxX + 24, y: src.minY)
+        origin.x = min(max(origin.x, margin), imageSize.width - margin - size.width)
+        origin.y = min(max(origin.y, margin), imageSize.height - margin - size.height)
+        return (factor, CGRect(origin: origin, size: size))
+    }
+
+    static func drawMagnifier(_ m: Annotation, in ctx: CGContext, size: CGSize) {
+        let full = CGRect(origin: .zero, size: size)
+        let src = m.rect.intersection(full).integral
+        let (factor, dst) = magnifierFrame(m, imageSize: size)
+        guard src.width >= 4, src.height >= 4,
+              let current = ctx.makeImage(),
+              let patch = current.cropping(to: src),
+              let big = enlarge(patch, factor: factor, smooth: m.smoothZoom) else { return }
+        let color = m.color.cgColor
+        let lw = CGFloat(max(2, m.lineWidth * 0.6))
+
+        withFlipped(ctx, height: size.height) {
+            // Connector lines between the facing sides of the source and the enlarged copy.
+            let dx = dst.midX - src.midX, dy = dst.midY - src.midY
+            let pairs: [(CGPoint, CGPoint)]
+            if abs(dx) >= abs(dy) {
+                let sx = dx > 0 ? src.maxX : src.minX, tx = dx > 0 ? dst.minX : dst.maxX
+                pairs = [(CGPoint(x: sx, y: src.minY), CGPoint(x: tx, y: dst.minY)),
+                         (CGPoint(x: sx, y: src.maxY), CGPoint(x: tx, y: dst.maxY))]
+            } else {
+                let sy = dy > 0 ? src.maxY : src.minY, ty = dy > 0 ? dst.minY : dst.maxY
+                pairs = [(CGPoint(x: src.minX, y: sy), CGPoint(x: dst.minX, y: ty)),
+                         (CGPoint(x: src.maxX, y: sy), CGPoint(x: dst.maxX, y: ty))]
+            }
+            ctx.saveGState()
+            ctx.setStrokeColor(m.color.withAlpha(0.75).cgColor)
+            ctx.setLineWidth(lw * 0.7)
+            ctx.setLineDash(phase: 0, lengths: [lw * 3, lw * 2])
+            for (a, b) in pairs { ctx.move(to: a); ctx.addLine(to: b) }
+            ctx.strokePath()
+            ctx.restoreGState()
+
+            // Source outline.
+            ctx.setStrokeColor(color)
+            ctx.setLineWidth(lw)
+            ctx.stroke(src)
+
+            // Enlarged copy with a drop shadow and border.
+            ctx.saveGState()
+            ctx.setShadow(offset: CGSize(width: 0, height: -lw * 2), blur: lw * 6, color: CGColor(gray: 0, alpha: 0.45))
+            ctx.setFillColor(.white)
+            ctx.fill(dst)
+            ctx.restoreGState()
+            ctx.saveGState()
+            ctx.interpolationQuality = m.smoothZoom ? .high : .none
+            drawImage(ctx, big, in: dst)
+            ctx.restoreGState()
+            ctx.setStrokeColor(color)
+            ctx.setLineWidth(lw * 1.5)
+            ctx.stroke(dst.insetBy(dx: -lw * 0.75, dy: -lw * 0.75))
+
+            // Zoom badge, just outside the enlarged copy (above it, or below if there is no room).
+            let label = NSAttributedString(string: String(format: "%.1f×", factor), attributes: [
+                .font: NSFont.systemFont(ofSize: max(12, lw * 5), weight: .bold),
+                .foregroundColor: NSColor.white,
+            ])
+            let ls = label.size()
+            let bw = ls.width + lw * 3, bh = ls.height + lw
+            let gap = lw * 2
+            let by = dst.minY - bh - gap >= 0 ? dst.minY - bh - gap : min(dst.maxY + gap, size.height - bh)
+            let badge = CGRect(x: max(0, dst.maxX - bw), y: by, width: bw, height: bh)
+            ctx.setFillColor(m.color.withAlpha(0.9).cgColor)
+            ctx.addPath(CGPath(roundedRect: badge, cornerWidth: badge.height / 2, cornerHeight: badge.height / 2, transform: nil))
+            ctx.fillPath()
+            label.draw(at: CGPoint(x: badge.minX + lw * 1.5, y: badge.minY + lw * 0.5))
+        }
+    }
+
     // MARK: - Shapes
 
     static func textAttributes(_ a: Annotation) -> [NSAttributedString.Key: Any] {
@@ -119,7 +308,7 @@ enum Renderer {
     }
 
     /// Bounds in image coordinates (used for selection and hit testing).
-    static func bounds(_ a: Annotation) -> CGRect {
+    static func bounds(_ a: Annotation, imageSize: CGSize? = nil) -> CGRect {
         switch a.kind {
         case .text:
             let r = CGRect(origin: a.start, size: textSize(a))
@@ -129,6 +318,9 @@ enum Renderer {
             return CGRect(x: a.start.x - d / 2, y: a.start.y - d / 2, width: d, height: d)
         case .line, .arrow:
             return a.rect.insetBy(dx: -(a.lineWidth + 8), dy: -(a.lineWidth + 8))
+        case .magnify:
+            let frame = imageSize.map { magnifierFrame(a, imageSize: $0).rect } ?? a.magnifiedRect
+            return a.rect.union(frame)
         default:
             return a.rect
         }
@@ -217,6 +409,8 @@ enum Renderer {
             let s = NSAttributedString(string: "\(a.number)", attributes: attrs)
             let sz = s.size()
             s.draw(at: CGPoint(x: r.midX - sz.width / 2, y: r.midY - sz.height / 2))
+        case .spotlight:
+            strokeSpotlight(a, in: ctx)
         default:
             break
         }

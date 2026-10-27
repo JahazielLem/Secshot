@@ -25,6 +25,14 @@ final class EditorModel: ObservableObject {
     @Published var lineWidth: Double { didSet { applyStyle { $0.lineWidth = lineWidth } } }
     @Published var fontSize: Double { didSet { applyStyle { $0.fontSize = fontSize } } }
 
+    // Defaults for new focus spotlights and magnifiers (also applied to the selected one).
+    @Published var spotlightShape = "ellipse" { didSet { applyStyle(to: .spotlight) { $0.shape = spotlightShape } } }
+    @Published var spotlightDim = 0.55 { didSet { applyStyle(to: .spotlight) { $0.dim = spotlightDim } } }
+    @Published var spotlightBlur = 0.5 { didSet { applyStyle(to: .spotlight) { $0.blurAmount = spotlightBlur } } }
+    @Published var spotlightOutline = false { didSet { applyStyle(to: .spotlight) { $0.filled = spotlightOutline } } }
+    @Published var zoomFactor = 2.0 { didSet { applyStyle(to: .magnify) { $0.zoom = zoomFactor } } }
+    @Published var smoothZoom = false { didSet { applyStyle(to: .magnify) { $0.smooth = smoothZoom } } }
+
     @Published var selectedID: UUID?
     @Published var draft: Annotation?
     @Published var draftCrop: CGRect?
@@ -42,6 +50,8 @@ final class EditorModel: ObservableObject {
     private var lastStyleEdit = Date.distantPast
     private var renderGeneration = 0
     private var moveOrigin: Annotation?
+    /// When dragging a magnifier: `true` moves the enlarged copy, `false` moves the source region.
+    private var movingMagnifiedCopy = false
 
     private struct Snapshot {
         var annotations: [Annotation]
@@ -123,13 +133,48 @@ final class EditorModel: ObservableObject {
     func newAnnotation(kind: AnnotationKind, from s: CGPoint, to e: CGPoint) -> Annotation {
         var c = RGBAColor(color)
         if kind == .redact { c = .black }
-        return Annotation(kind: kind, start: s, end: e, color: c, lineWidth: lineWidth, fontSize: fontSize)
+        var a = Annotation(kind: kind, start: s, end: e, color: c, lineWidth: lineWidth, fontSize: fontSize)
+        switch kind {
+        case .spotlight:
+            a.shape = spotlightShape
+            a.dim = spotlightDim
+            a.blurAmount = spotlightBlur
+            a.filled = spotlightOutline
+        case .magnify:
+            a.zoom = zoomFactor
+            a.smooth = smoothZoom
+        default:
+            break
+        }
+        return a
     }
 
     func add(_ a: Annotation) {
+        var a = a
+        if a.kind == .magnify { a.dest = defaultMagnifierOrigin(for: a) }
         pushUndo()
         annotations.append(a)
         save()
+    }
+
+    /// Places the enlarged copy next to the source: right, left, below or above, whichever fits.
+    private func defaultMagnifierOrigin(for a: Annotation) -> CGPoint {
+        let src = a.rect, gap: CGFloat = max(24, CGFloat(a.lineWidth) * 4)
+        let size = CGSize(width: src.width * a.zoomFactor, height: src.height * a.zoomFactor)
+        let candidates = [
+            CGPoint(x: src.maxX + gap, y: src.midY - size.height / 2),
+            CGPoint(x: src.minX - gap - size.width, y: src.midY - size.height / 2),
+            CGPoint(x: src.midX - size.width / 2, y: src.maxY + gap),
+            CGPoint(x: src.midX - size.width / 2, y: src.minY - gap - size.height),
+        ]
+        let bounds = CGRect(origin: .zero, size: imageSize)
+        let fit = candidates.first { bounds.contains(CGRect(origin: $0, size: size)) }
+        return fit ?? candidates[0]   // the renderer clamps it inside the image
+    }
+
+    /// Frame of a magnifier's enlarged copy as it will be rendered.
+    func magnifierFrame(_ a: Annotation) -> CGRect {
+        Renderer.magnifierFrame(a, imageSize: imageSize).rect
     }
 
     func addStep(at p: CGPoint) {
@@ -190,7 +235,23 @@ final class EditorModel: ObservableObject {
         if !a.kind.isRedaction { color = a.color.color }
         lineWidth = a.lineWidth
         fontSize = a.fontSize
+        if a.kind == .spotlight {
+            spotlightShape = a.spotlightShape
+            spotlightDim = a.spotlightDim
+            spotlightBlur = a.spotlightBlur
+            spotlightOutline = a.filled
+        }
+        if a.kind == .magnify {
+            zoomFactor = a.zoomFactor
+            smoothZoom = a.smoothZoom
+        }
         syncingStyle = false
+    }
+
+    /// Applies a style change only when the selected annotation is of the given kind.
+    private func applyStyle(to kind: AnnotationKind, _ change: (inout Annotation) -> Void) {
+        guard selected?.kind == kind else { return }
+        applyStyle(change)
     }
 
     private func applyStyle(_ change: (inout Annotation) -> Void) {
@@ -203,18 +264,38 @@ final class EditorModel: ObservableObject {
     }
 
     func hitTest(_ p: CGPoint) -> UUID? {
-        annotations.reversed().first { Renderer.bounds($0).insetBy(dx: -4, dy: -4).contains(p) }?.id
+        annotations.reversed().first { a in
+            if a.kind == .magnify {
+                return a.rect.insetBy(dx: -4, dy: -4).contains(p) || magnifierFrame(a).insetBy(dx: -4, dy: -4).contains(p)
+            }
+            return Renderer.bounds(a, imageSize: imageSize).insetBy(dx: -4, dy: -4).contains(p)
+        }?.id
     }
 
-    func beginMove() {
-        guard let a = selected else { return }
+    func beginMove(at p: CGPoint) {
+        guard var a = selected else { return }
         pushUndo()
+        movingMagnifiedCopy = false
+        if a.kind == .magnify {
+            // Freeze the rendered position so dragging starts from what the user sees.
+            a.dest = magnifierFrame(a).origin
+            movingMagnifiedCopy = magnifierFrame(a).contains(p) && !a.rect.contains(p)
+        }
         moveOrigin = a
     }
 
     func move(by d: CGSize) {
         guard var a = moveOrigin, let i = annotations.firstIndex(where: { $0.id == a.id }) else { return }
-        a.offset(by: d)
+        if a.kind == .magnify && movingMagnifiedCopy {
+            let o = a.dest ?? .zero
+            a.dest = CGPoint(x: o.x + d.width, y: o.y + d.height)
+        } else if a.kind == .magnify {
+            // Moving the source keeps the enlarged copy where it is.
+            a.start.x += d.width; a.start.y += d.height
+            a.end.x += d.width; a.end.y += d.height
+        } else {
+            a.offset(by: d)
+        }
         annotations[i] = a
     }
 
