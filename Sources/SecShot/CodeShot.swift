@@ -326,6 +326,8 @@ struct CodeShotOptions: Equatable {
     var lineMarks: [Int: DiffMark] = [:]
     /// Changed character ranges inside modified lines.
     var emphasis: [Int: [NSRange]] = [:]
+    /// Pretty-print JSON documents and JSON bodies of HTTP messages.
+    var formatJSON = true
     /// Redaction marker (e.g. "[REDACTED]") drawn as a red badge wherever it appears.
     var redactionMarker = "[REDACTED]"
     var shadow = true
@@ -369,7 +371,8 @@ enum CodeShotRenderer {
     }
 
     static func render(_ o: CodeShotOptions) -> Output? {
-        let code = CodeHighlighter.highlight(o.code, language: o.language)
+        let source = o.formatJSON ? JSONFormatter.format(o.code, language: o.language) : o.code
+        let code = CodeHighlighter.highlight(source, language: o.language)
         let theme = o.theme
         let analysis = o.securityAnalysis ? HTTPSecurityAnalyzer.analyze(code, redactionMarker: o.redactionMarker) : .init()
         let s = o.scale

@@ -107,6 +107,7 @@ Turn code, terminal sessions and raw HTTP traffic into clean, styled images (⌘
 - **Timeline** mode chains N snippets into a numbered attack narrative. Arrows between snippets are optional in both modes.
 - **Redact** (⇧⌘R or right-click) replaces the selected text with a marker such as `[REDACTED]`, configurable in *Settings → Security* or from the window. The marker is highlighted in red in the image, and redacted credentials are no longer flagged by the header analysis.
 - **Themes you can bring and tweak**: import VS Code (`.json`, comments allowed) or TextMate (`.tmTheme`) themes, customize any color with a live preview, and export them as JSON. Custom themes live in `~/Library/Application Support/SecShot/Themes`.
+- **Format JSON**: minified JSON documents and HTTP bodies are indented (key order and values are preserved), so diffs point at the exact field that changed.
 - Line numbers, highlighted lines, wrapping that keeps header values aligned, and a window title.
 - Saved snippets become regular evidence, so you can redact, annotate, spotlight or zoom them. Pasted code is never written to disk unless you save the image.
 

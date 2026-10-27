@@ -73,6 +73,7 @@ struct CodeShotView: View {
     @AppStorage("code.lineNumbers") private var lineNumbers = true
     @AppStorage("code.maxColumns") private var maxColumns = 100
     @AppStorage("code.security") private var securityAnalysis = true
+    @AppStorage("code.formatJSON") private var formatJSON = true
     @AppStorage("code.shadow") private var shadow = true
     @ViewState private var themes: [CodeTheme] = CodeThemeLibrary.all()
     @ViewState private var editingTheme: CodeTheme?
@@ -98,7 +99,7 @@ struct CodeShotView: View {
                         padding: padding, fontSize: fontSize, lineNumbers: lineNumbers,
                         title: mode == .single ? title : "", highlightLines: mode == .single ? highlightLines : "",
                         maxColumns: maxColumns, securityAnalysis: securityAnalysis,
-                        redactionMarker: redactionText, shadow: shadow)
+                        formatJSON: formatJSON, redactionMarker: redactionText, shadow: shadow)
     }
 
     private var input: RenderInput {
@@ -340,6 +341,7 @@ struct CodeShotView: View {
                     TextField("Window title (automatic if empty)", text: $title)
                     TextField("Highlight lines, e.g. 1, 6-7", text: $highlightLines)
                 }
+                Toggle("Format JSON (indent minified JSON and HTTP bodies)", isOn: $formatJSON)
                 Toggle("Line numbers", isOn: $lineNumbers)
                 Toggle("Analyze HTTP security headers", isOn: $securityAnalysis)
                     .help("Marks each header as good / weak / informational and lists missing recommended headers.")

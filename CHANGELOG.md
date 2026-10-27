@@ -2,6 +2,13 @@
 
 > Made by AI
 
+## 0.2.1
+
+### Fixed
+- Minified JSON (standalone or as an HTTP body) was drawn as a single wrapped line. Code Snippet now
+  pretty-prints it with indentation, preserving key order and literal values, so comparisons diff
+  field by field. Can be turned off with **Format JSON**.
+
 ## 0.2.0
 
 ### Added

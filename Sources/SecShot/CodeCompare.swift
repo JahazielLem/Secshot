@@ -100,6 +100,9 @@ extension CodeShotRenderer {
                                  options o: CodeShotOptions, horizontal: Bool, diff: Bool, arrows: Bool = false)
         -> (image: CGImage?, findings: [HeaderFinding], summary: String) {
         var a = o, b = o
+        // Format first so the diff compares the same lines that are drawn.
+        let base = o.formatJSON ? JSONFormatter.format(base, language: o.language) : base
+        let change = o.formatJSON ? JSONFormatter.format(change, language: o.language) : change
         a.code = base; b.code = change
         a.background = .none; b.background = .none
         a.highlightLines = ""; b.highlightLines = ""
