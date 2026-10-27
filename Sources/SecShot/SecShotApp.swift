@@ -36,7 +36,14 @@ struct SecShotApp: App {
                     .keyboardShortcut("3", modifiers: .command)
                 Button("Code Snippet…") { WindowManager.shared.showCode() }
                     .keyboardShortcut("4", modifiers: .command)
+                Button("HTTP Traffic") { WindowManager.shared.showTraffic() }
+                    .keyboardShortcut("5", modifiers: .command)
                 Divider()
+                Button("Import HTTP Traffic (Burp, HAR)…") {
+                    WindowManager.shared.showTraffic()
+                    TrafficStore.shared.importWithPanel()
+                }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
                 Button("Import Images…") { LibraryStore.shared.importWithPanel() }
                     .keyboardShortcut("o", modifiers: .command)
             }
@@ -121,6 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         add("Comparison / Timeline…   ⌃⇧7", #selector(openCompare))
         add("Compare External Images…", #selector(openCompareExternal))
         add("Code Snippet…   ⌃⇧6", #selector(openCode))
+        add("HTTP Traffic…   ⌃⇧8", #selector(openTraffic))
         add("Settings…", #selector(openSettings))
         menu.addItem(.separator())
         add("Quit SecShot", #selector(quit), "q")
@@ -149,6 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openCompare() { WindowManager.shared.showCompare() }
     @objc private func openCompareExternal() { WindowManager.shared.showCompare(external: true) }
     @objc private func openCode() { WindowManager.shared.showCode() }
+    @objc private func openTraffic() { WindowManager.shared.showTraffic() }
     @objc private func openSettings() { WindowManager.shared.showSettings() }
     @objc private func quit() { NSApp.terminate(nil) }
 }

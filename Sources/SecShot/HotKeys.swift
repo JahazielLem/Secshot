@@ -22,6 +22,7 @@ final class HotKeyManager {
         register(UInt32(kVK_ANSI_2), mods) { CaptureBar.shared.toggle() }
         register(UInt32(kVK_ANSI_6), mods) { WindowManager.shared.showCode() }
         register(UInt32(kVK_ANSI_7), mods) { WindowManager.shared.showCompare() }
+        register(UInt32(kVK_ANSI_8), mods) { WindowManager.shared.showTraffic() }
     }
 
     private func install() {

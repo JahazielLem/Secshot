@@ -11,9 +11,9 @@ and redaction inside code text. Together they cover the full loop: capture → c
 
 ## Integrations with pentest tooling
 
-1. **Import from Burp Suite and Caido.** Read Burp's "Save items" XML or `.har` files and build the
+1. ✅ *(0.3.0: Burp XML and HAR import)* **Import from Burp Suite and Caido.** Read Burp's "Save items" XML or `.har` files and build the
    request/response comparison or the flow timeline automatically. Biggest time saver.
-2. **Browser DevTools HAR import** to document complete flows (login → token → action) in one click.
+2. ✅ *(0.3.0)* **Browser DevTools HAR import** to document complete flows (login → token → action) in one click.
 3. **Export to reporting platforms:** Dradis, PlexTrac, Ghostwriter, SysReptor and DefectDojo,
    uploading each piece of evidence to the right finding through their APIs.
 4. **Copy as command:** turn an HTTP request into a `curl` command or a Python (`requests`) script

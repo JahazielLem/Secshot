@@ -38,6 +38,9 @@ problems and how SecShot addresses them:
 - **Launch at login:** a LaunchAgent bundled in the app and registered with `SMAppService`. It
   passes `--background`, so the app starts without windows.
 - **Storage:** `~/Pictures/SecShot/` (images + `library.json`).
+- **Interface:** one main window with a navigation rail. Each feature is a section, so new ones
+  (findings, projects, reports) are added without new windows. Settings and per-image editors keep
+  their own windows, following macOS conventions.
 
 ## 3. Architecture
 
@@ -60,8 +63,13 @@ Sources/SecShot/
 ├── CodeShot.swift          Code themes, frames, HTTP security-header analysis, renderer
 ├── CodeCompare.swift       Line diff, code comparison and timeline composition
 ├── CodeThemeLibrary.swift  Custom themes, VS Code / TextMate import, JSON export
+├── HTTPTraffic.swift       Burp XML (XXE-safe) / HAR / raw HTTP import and redaction
+├── JSONFormatter.swift     Order-preserving JSON pretty-printer
+├── CodeStudioModel.swift   Shared Code Snippet content (opened from other sections)
 ├── SelfTest.swift          Command-line utilities (--selftest, --codeshot, …)
 └── Views/
+    ├── MainWindowView.swift Single main window with a navigation rail
+    ├── TrafficView.swift   HTTP Traffic section
     ├── LibraryView.swift   History, gallery, multi-selection, context menu
     ├── EditorModel.swift   Editor state, undo/redo, detection
     ├── EditorView.swift    Canvas, tools, inspector

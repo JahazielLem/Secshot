@@ -6,6 +6,7 @@
 
 import AppKit
 import ServiceManagement
+import SwiftUI
 
 /// Command-line utilities:
 ///   SecShot --selftest <folder>    renders sample images with the rendering engine
@@ -16,8 +17,19 @@ import ServiceManagement
 ///   SecShot --codecompare <before> <after> <out.png> [theme]         before/after diff of two snippets
 ///   SecShot --codetimeline <out.png> <step files…>                   numbered timeline of snippets
 enum CommandLineTools {
+    private static let knownFlags: Set<String> = [
+        "--selftest", "--make-icon", "--permission-status", "--login-status", "--codeshot", "--codecompare",
+        "--codetimeline", "--traffic", "--snapshot-ui", "--background",
+    ]
+
     static func runIfRequested() {
         let args = CommandLine.arguments
+        // Unknown "--" options must not fall through and launch the full app.
+        if let unknown = args.dropFirst().first(where: { $0.hasPrefix("--") && !knownFlags.contains($0) }) {
+            print("SecShot: unknown option \(unknown)")
+            print("Options: " + knownFlags.sorted().joined(separator: " "))
+            exit(2)
+        }
         if let i = args.firstIndex(of: "--selftest"), i + 1 < args.count {
             selfTest(URL(fileURLWithPath: args[i + 1]))
             exit(0)
@@ -89,10 +101,69 @@ enum CommandLineTools {
             write(CodeShotRenderer.renderTimeline(steps: steps, options: o, horizontal: false), URL(fileURLWithPath: args[i + 1]))
             exit(0)
         }
+        if let i = args.firstIndex(of: "--traffic"), i + 1 < args.count {
+            // SecShot --traffic <burp.xml|file.har|request.txt> [a b out.png]  lists items; optionally compares two
+            do {
+                let r = try TrafficImporter.load(URL(fileURLWithPath: args[i + 1]), startIndex: 1)
+                print("format: \(r.format), items: \(r.exchanges.count)")
+                for e in r.exchanges {
+                    print("  #\(e.index) \(e.method) \(e.host)\(e.path) → \(e.statusText) [\(e.mime)] req=\(e.request.count)B res=\(e.responseLength)B comment=\"\(e.comment.prefix(60))\"")
+                }
+                if i + 4 < args.count, let a = Int(args[i + 2]), let b = Int(args[i + 3]),
+                   let ea = r.exchanges.first(where: { $0.index == a }), let eb = r.exchanges.first(where: { $0.index == b }) {
+                    let f = TrafficFormatter.Options()
+                    var o = CodeShotOptions(code: "")
+                    o.theme = CodeTheme.named("Catppuccin Mocha")
+                    let reqs = CodeShotRenderer.renderComparison(base: TrafficFormatter.text(ea.request, f), change: TrafficFormatter.text(eb.request, f),
+                                                                 baseLabel: ea.shortLabel, changeLabel: eb.shortLabel,
+                                                                 options: o, horizontal: true, diff: true, arrows: true)
+                    write(reqs.image, URL(fileURLWithPath: args[i + 4]))
+                    print("  \(reqs.summary)")
+                    print(TrafficFormatter.text(eb.request, f))
+                }
+            } catch {
+                print("✗ \(error.localizedDescription)")
+                exit(1)
+            }
+            exit(0)
+        }
+        if let i = args.firstIndex(of: "--snapshot-ui"), i + 2 < args.count {
+            // Developer aid: SecShot --snapshot-ui <library|compare|code|traffic> <out.png> [traffic file]
+            // Renders the main window offscreen (no Screen Recording permission needed).
+            MainActor.assumeIsolated {
+                snapshotUI(section: args[i + 1], output: args[i + 2], trafficFile: i + 3 < args.count ? args[i + 3] : nil)
+            }
+            exit(0)
+        }
         if let i = args.firstIndex(of: "--make-icon"), i + 1 < args.count {
             makeIcon(URL(fileURLWithPath: args[i + 1]))
             exit(0)
         }
+    }
+
+    @MainActor
+    private static func snapshotUI(section: String, output: String, trafficFile: String?) {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.prohibited)
+        Prefs.register()
+        if let trafficFile {
+            TrafficStore.shared.importFiles([URL(fileURLWithPath: trafficFile)])
+            RunLoop.main.run(until: Date().addingTimeInterval(1.5))
+            let items = TrafficStore.shared.exchanges
+            TrafficStore.shared.selection = Set(items.prefix(2).map(\.id))
+        }
+        AppNavigation.shared.section = AppSection(rawValue: section) ?? .library
+        let view = NSHostingView(rootView: MainWindowView().environmentObject(LibraryStore.shared))
+        view.frame = NSRect(x: 0, y: 0, width: 1460, height: 900)
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.contentView = view
+        window.appearance = NSAppearance(named: .aqua)
+        window.orderBack(nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(2))
+        view.layoutSubtreeIfNeeded()
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        write(rep.cgImage, URL(fileURLWithPath: output))
     }
 
     private static func write(_ img: CGImage?, _ url: URL) {

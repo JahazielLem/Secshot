@@ -93,7 +93,7 @@ struct SettingsView: View {
                 Toggle("Copy to clipboard after capturing", isOn: $copyAfter)
                 Toggle("Shutter sound", isOn: $sound)
                 LabeledContent("Global hotkeys") {
-                    Text("⌃⇧4 region · ⌃⇧5 window · ⌃⇧3 screen · ⌃⇧2 bar · ⌃⇧6 code · ⌃⇧7 compare / timeline")
+                    Text("⌃⇧4 region · ⌃⇧5 window · ⌃⇧3 screen · ⌃⇧2 bar · ⌃⇧6 code · ⌃⇧7 compare / timeline · ⌃⇧8 HTTP traffic")
                         .font(.callout).multilineTextAlignment(.trailing)
                 }
                 Button("Open Screen Recording Permissions…") { ScreenPermission.openSettings() }

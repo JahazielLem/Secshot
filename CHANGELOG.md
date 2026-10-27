@@ -2,6 +2,28 @@
 
 > Made by AI
 
+## 0.3.0
+
+### Added
+- **HTTP Traffic** section (⌘5, ⌃⇧8 from anywhere, ⇧⌘I to import): import Burp Suite “Save items”
+  XML, HAR files (browser DevTools, Caido, ZAP) and raw HTTP requests/responses, then turn them into
+  a snippet, a before/after comparison of two requests or responses, or a timeline.
+  - Credentials (cookies, `Authorization`, API keys, password/token fields) are redacted by default.
+  - JSON bodies are pretty-printed and long bodies are cut to a configurable number of lines.
+  - Burp XML is parsed with external entities disabled (no XXE); imported traffic stays in memory only.
+- `--traffic` command-line helper to list items from an export and compare two of them.
+
+### Changed
+- **Single main window** with a navigation rail (Library, Compare, Code, Traffic) instead of one
+  window per feature. Settings and per-image editors keep their own windows.
+- Code Snippet content now lives in a shared model, so other sections can open snippets and text is
+  kept when switching sections.
+
+### Fixed
+- The permission alert and repair could run from a bare binary started in a terminal, and the repair
+  fell back to a hard-coded bundle identifier. Both now only act inside the installed app bundle.
+- Unknown command-line options now print the available options and exit instead of launching the app.
+
 ## 0.2.1
 
 ### Fixed

@@ -8,7 +8,7 @@
 # Builds SecShot and produces build/SecShot.app.
 #
 # Optional environment variables:
-#   VERSION=1.2.0        CFBundleShortVersionString (default 0.2.1)
+#   VERSION=1.2.0        CFBundleShortVersionString (default 0.3.0)
 #   BUILD_NUMBER=42      CFBundleVersion (default 1)
 #   UNIVERSAL=1          universal arm64 + x86_64 binary (requires Xcode)
 #   SIGN_IDENTITY="..."  signing identity. Defaults to "SecShot Local Signing" if present, otherwise ad-hoc.
@@ -16,7 +16,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-VERSION=${VERSION:-0.2.1}
+VERSION=${VERSION:-0.3.0}
 BUILD_NUMBER=${BUILD_NUMBER:-1}
 BUNDLE_ID=local.secshot.app
 

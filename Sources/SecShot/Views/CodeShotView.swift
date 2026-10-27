@@ -46,19 +46,20 @@ private struct RenderInput: Equatable {
 struct CodeShotView: View {
     @EnvironmentObject var store: LibraryStore
 
-    // Content
+    // Content (shared model so other sections can open snippets and text survives navigation)
+    @ObservedObject private var studio = CodeStudioModel.shared
+    private var code: String { get { studio.code } nonmutating set { studio.code = newValue } }
+    private var title: String { get { studio.title } nonmutating set { studio.title = newValue } }
+    private var highlightLines: String { get { studio.highlightLines } nonmutating set { studio.highlightLines = newValue } }
+    private var base: String { get { studio.base } nonmutating set { studio.base = newValue } }
+    private var change: String { get { studio.change } nonmutating set { studio.change = newValue } }
+    private var baseLabel: String { get { studio.baseLabel } nonmutating set { studio.baseLabel = newValue } }
+    private var changeLabel: String { get { studio.changeLabel } nonmutating set { studio.changeLabel = newValue } }
+    private var showDiff: Bool { get { studio.showDiff } nonmutating set { studio.showDiff = newValue } }
+    private var steps: [CodeStep] { get { studio.steps } nonmutating set { studio.steps = newValue } }
+    private var selectedStep: UUID? { get { studio.selectedStep } nonmutating set { studio.selectedStep = newValue } }
     @AppStorage("code.mode") private var modeRaw = CodeShotMode.single.rawValue
-    @ViewState private var code = CodeSamples.httpResponse
-    @ViewState private var title = ""
-    @ViewState private var highlightLines = ""
-    @ViewState private var base = CodeSamples.compareBefore
-    @ViewState private var change = CodeSamples.compareAfter
-    @ViewState private var baseLabel = "ORIGINAL REQUEST"
-    @ViewState private var changeLabel = "TAMPERED REQUEST"
-    @ViewState private var showDiff = true
     @AppStorage("code.compareHorizontal") private var compareHorizontal = true
-    @ViewState private var steps: [CodeStep] = CodeSamples.timelineSteps
-    @ViewState private var selectedStep: UUID?
     @AppStorage("code.timelineHorizontal") private var timelineHorizontal = false
     @AppStorage("code.arrows") private var showArrows = true
     @AppStorage(Prefs.redactionText) private var redactionText = "[REDACTED]"
@@ -232,11 +233,11 @@ struct CodeShotView: View {
                     }
                 }
                 .fixedSize()
-                pasteButton(into: $code)
+                pasteButton(into: $studio.code)
                 Button("Clear") { code = "" }
             }
             .controlSize(.small)
-            editor($code, minHeight: 200)
+            editor($studio.code, minHeight: 200)
         }
         .padding(12)
     }
@@ -245,11 +246,11 @@ struct CodeShotView: View {
         VStack(spacing: 6) {
             HStack {
                 Circle().fill(Color.blue).frame(width: 8, height: 8)
-                TextField("Label", text: $baseLabel).textFieldStyle(.roundedBorder)
-                pasteButton(into: $base)
+                TextField("Label", text: $studio.baseLabel).textFieldStyle(.roundedBorder)
+                pasteButton(into: $studio.base)
             }
             .controlSize(.small)
-            editor($base)
+            editor($studio.base)
             HStack {
                 Button { swap(&base, &change); swap(&baseLabel, &changeLabel) } label: {
                     Label("Swap", systemImage: "arrow.up.arrow.down")
@@ -257,7 +258,7 @@ struct CodeShotView: View {
                 Spacer()
                 Toggle("Arrows", isOn: $showArrows)
                     .help("Draw an arrow from the first snippet to the second")
-                Toggle("Diff", isOn: $showDiff)
+                Toggle("Diff", isOn: $studio.showDiff)
                     .help("Highlight removed and added lines")
                 Picker("", selection: $compareHorizontal) {
                     Image(systemName: "rectangle.split.2x1").tag(true)
@@ -270,11 +271,11 @@ struct CodeShotView: View {
             .controlSize(.small)
             HStack {
                 Circle().fill(Color.red).frame(width: 8, height: 8)
-                TextField("Label", text: $changeLabel).textFieldStyle(.roundedBorder)
-                pasteButton(into: $change)
+                TextField("Label", text: $studio.changeLabel).textFieldStyle(.roundedBorder)
+                pasteButton(into: $studio.change)
             }
             .controlSize(.small)
-            editor($change)
+            editor($studio.change)
         }
         .padding(12)
     }
@@ -338,8 +339,8 @@ struct CodeShotView: View {
                     if language == CodeLanguage.auto.rawValue, detected != .auto {
                         Text("Detected: \(detected.label)").font(.caption).foregroundStyle(.secondary)
                     }
-                    TextField("Window title (automatic if empty)", text: $title)
-                    TextField("Highlight lines, e.g. 1, 6-7", text: $highlightLines)
+                    TextField("Window title (automatic if empty)", text: $studio.title)
+                    TextField("Highlight lines, e.g. 1, 6-7", text: $studio.highlightLines)
                 }
                 Toggle("Format JSON (indent minified JSON and HTTP bodies)", isOn: $formatJSON)
                 Toggle("Line numbers", isOn: $lineNumbers)

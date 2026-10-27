@@ -33,27 +33,27 @@ final class WindowManager {
         NSApp.activate()
     }
 
-    func showLibrary() {
-        show("library", title: "SecShot — Evidence Library", size: NSSize(width: 1320, height: 820)) {
-            AnyView(LibraryView().environmentObject(LibraryStore.shared))
+    /// Brings up the main window on the given section.
+    func showSection(_ section: AppSection) {
+        AppNavigation.shared.section = section
+        show("main", title: "SecShot", size: NSSize(width: 1460, height: 900)) {
+            AnyView(MainWindowView().environmentObject(LibraryStore.shared))
         }
     }
+
+    func showLibrary() { showSection(.library) }
 
     static let compareTabKey = "compareTab"
 
-    /// Opens the comparison window. `external: true` switches to the External Images tab.
+    /// Opens Compare & Timeline. `external: true` switches to the External Images tab.
     func showCompare(external: Bool = false) {
         UserDefaults.standard.set(external ? 1 : 0, forKey: Self.compareTabKey)
-        show("compare", title: "SecShot — Comparison & Timeline", size: NSSize(width: 1280, height: 820)) {
-            AnyView(CompareWindowView().environmentObject(LibraryStore.shared))
-        }
+        showSection(.compare)
     }
 
-    func showCode() {
-        show("code", title: "SecShot — Code Snippet", size: NSSize(width: 1300, height: 840)) {
-            AnyView(CodeShotView().environmentObject(LibraryStore.shared))
-        }
-    }
+    func showCode() { showSection(.code) }
+
+    func showTraffic() { showSection(.traffic) }
 
     /// Opens an editor window for any item (used for external images in the comparison workspace).
     func showEditor(_ item: CaptureItem) {

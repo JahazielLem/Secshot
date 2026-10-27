@@ -19,10 +19,16 @@ enum ScreenPermission {
 
     static var isGranted: Bool { CGPreflightScreenCaptureAccess() }
 
+    /// Only the installed app bundle may prompt or repair. A bare binary run from a terminal (tests,
+    /// command-line helpers) must never show alerts or touch the system permission database.
+    private static var isAppBundle: Bool {
+        Bundle.main.bundleURL.pathExtension == "app" && Bundle.main.bundleIdentifier != nil
+    }
+
     /// Called at launch. The first time, macOS shows its own prompt; afterwards SecShot shows a
     /// guided alert instead of repeating the system prompt.
     static func checkAtLaunch() {
-        guard !isGranted else { return }
+        guard isAppBundle, !isGranted else { return }
         let defaults = UserDefaults.standard
         // Existing users (non-empty library) already went through the system prompt once.
         if !defaults.bool(forKey: requestedKey) && LibraryStore.shared.items.isEmpty {
@@ -41,7 +47,7 @@ enum ScreenPermission {
     }
 
     static func presentAlert() {
-        guard !alertVisible else { return }
+        guard isAppBundle, !alertVisible else { return }
         alertVisible = true
         defer { alertVisible = false }
 
@@ -68,9 +74,10 @@ enum ScreenPermission {
 
     /// Removes SecShot's (possibly stale) Screen Recording entry and registers it again.
     static func repair() {
+        guard isAppBundle, let bundleID = Bundle.main.bundleIdentifier else { return }
         let reset = Process()
         reset.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
-        reset.arguments = ["reset", "ScreenCapture", Bundle.main.bundleIdentifier ?? "local.secshot.app"]
+        reset.arguments = ["reset", "ScreenCapture", bundleID]
         try? reset.run()
         reset.waitUntilExit()
         CGRequestScreenCaptureAccess()   // adds SecShot back to the list

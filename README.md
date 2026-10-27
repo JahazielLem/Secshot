@@ -142,6 +142,17 @@ Turn code, terminal sessions and raw HTTP traffic into clean, styled images (⌘
 ```
 </details>
 
+### HTTP traffic (Burp Suite, HAR)
+Import the requests you used during the test and turn them into evidence (⌘5, ⇧⌘I).
+- **Burp Suite**: in Proxy › HTTP history (or Repeater/Logger) select the requests → right-click →
+  **Save items** to get the XML export. **HAR** files from browser DevTools, Caido or ZAP and raw
+  `.txt`/`.http` requests or responses are supported too. Burp `.burp` project files are not (closed format).
+- Select **1** item for a snippet (request, response, or both side by side), **2** to compare their
+  requests or responses with a line diff, or **several** for a timeline.
+- Credentials are **redacted by default** (cookies, `Authorization`, API keys, password/token fields),
+  JSON bodies are pretty-printed, and long bodies are limited to a configurable number of lines.
+- Imported traffic stays in memory only, and XML is parsed with external entities disabled.
+
 ### Output
 - macOS-style window shadow and rounded corners, which you can toggle; transparent or white background.
 - PNG or JPEG, optional 144 DPI tagging so Retina captures paste at the right size.
@@ -191,6 +202,9 @@ shasum -a 256 -c SHA256SUMS.txt
 | ⌘1 / ⌘2 | Open the Library / Comparison window |
 | ⌘3 | Compare external images |
 | ⌘4 | Code snippet |
+| ⌘5 | HTTP traffic |
+| ⇧⌘I | Import HTTP traffic (Burp XML, HAR) |
+| ⌃⇧8 | Open HTTP traffic (from any app) |
 | ⌘, | Settings |
 
 ### Editor shortcuts
@@ -303,10 +317,13 @@ Sources/SecShot/
 ├── CodeShot.swift          Code themes, header analysis and renderer
 ├── CodeCompare.swift       Code diff, comparison and timeline
 ├── CodeThemeLibrary.swift  Custom / imported themes
+├── HTTPTraffic.swift       Burp XML / HAR / raw HTTP import, redaction, formatting
+├── JSONFormatter.swift     Order-preserving JSON pretty-printer
 ├── ExportService.swift     Metadata-free export, clipboard, manifest
 ├── HotKeys.swift           Global hotkeys (Carbon)
 ├── LoginItem.swift         Background launch at login
-└── Views/                  Library, editor, comparison and settings UI
+└── Views/                  Main window (navigation rail), library, editor, comparison,
+                            code, traffic and settings UI
 ```
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the design rationale and roadmap.
