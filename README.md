@@ -13,7 +13,7 @@ with the speed of the native macOS screenshot tool and the workflow of a dedicat
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)
 ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
 
-[What's new](#whats-new-in-030) ·
+[What's new](#whats-new-in-040) ·
 [Features](#features) ·
 [Installation](#installation) ·
 [Usage](#usage) ·
@@ -41,7 +41,12 @@ were not tampered with. SecShot solves that workflow end to end:
 - **From proxy to report:** import Burp Suite or HAR traffic and turn requests into styled, redacted
   code evidence, comparisons and timelines.
 
-## What's new in 0.3.0
+## What's new in 0.4.0
+
+- **Text Capture (OCR)** — press **⌘⇧2** anywhere, select an area and get its text on the clipboard
+  as plain text, **Markdown** (tables become Markdown tables) or CSV. Like TextSniper, built for reports.
+
+### 0.3.0
 
 - **HTTP Traffic** — import Burp Suite “Save items” XML, HAR files or raw requests, then create a
   snippet, compare two requests/responses with a diff, or build a timeline. Credentials are redacted
@@ -61,15 +66,15 @@ See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Features
 
-SecShot runs as one main window with a navigation rail — **Library**, **Compare**, **Code** and
-**Traffic** — plus the menu bar icon, the floating capture bar and global hotkeys. Settings and the
+SecShot runs as one main window with a navigation rail — **Library**, **Compare**, **Code**,
+**Traffic** and **Text** — plus the menu bar icon, the floating capture bar and global hotkeys. Settings and the
 per-image editors open in their own windows.
 
 ### Capture
 | | |
 |---|---|
 | **Region / Window / Full screen** | Uses the native macOS capture engine, so selection behaves exactly like ⌘⇧4. |
-| **Global hotkeys** | ⌃⇧4 region · ⌃⇧5 window · ⌃⇧3 full screen · ⌃⇧2 toggle capture bar · ⌃⇧6 / ⌃⇧7 / ⌃⇧8 open Code, Compare, Traffic. |
+| **Global hotkeys** | ⌃⇧4 region · ⌃⇧5 window · ⌃⇧3 full screen · ⌘⇧2 text (OCR) · ⌃⇧2 toggle capture bar · ⌃⇧6 / ⌃⇧7 / ⌃⇧8 open Code, Compare, Traffic. |
 | **Floating capture bar** | A ⌘⇧5-style toolbar that docks to any screen edge or floats anywhere, and can be turned on and off. |
 | **Timer** | 5 s and 10 s delays to capture menus and hover states. |
 | **Menu bar icon** | Every capture action is one click away. |
@@ -178,6 +183,29 @@ Import the requests you used during the test and turn them into evidence (⌘5, 
   JSON bodies are pretty-printed, and long bodies are limited to a configurable number of lines.
 - Imported traffic stays in memory only, and XML is parsed with external entities disabled.
 
+### Text capture (OCR)
+Copy text from anything on screen — a PDF table, a terminal in a VM, a scanner report, a video call.
+- **⌘⇧2** from any app: select an area and the text is copied to the clipboard in your default format.
+- **Plain text** keeps line breaks; table columns are separated by tabs, so they paste as columns in
+  Excel or Numbers.
+- **Markdown** detects tables (aligned columns become `| … |` tables with a header row), bullet and
+  numbered lists, and headings (larger text).
+- **CSV** for spreadsheets.
+- The **Text** section (⌘6) shows the detected text over the image, lets you switch format, edit and
+  re-copy, recognize an image file or a clipboard image, and keeps recent captures in memory.
+- Recognition runs on-device with Apple Vision; the captured image is not saved unless you add it to
+  the library. Turn off *language correction* in Settings for code, hashes and tokens.
+- If no text is found, only a notice is shown: nothing is copied or kept.
+
+### Copy to clipboard
+Each capture type has its own switch in *Settings → Copy to Clipboard* — region, window, full screen,
+comparison/timeline captures and text capture. When enabled, the result goes straight to the
+clipboard (images for screenshots, text for ⌘⇧2); captures are still saved to the library as usual.
+
+<p align="center">
+  <img src="docs/images/16-text-capture.png" alt="Text section with a recognized table converted to Markdown" width="820">
+</p>
+
 ### Output
 - macOS-style window shadow and rounded corners, which you can toggle; transparent or white background.
 - PNG or JPEG, optional 144 DPI tagging so Retina captures paste at the right size.
@@ -221,6 +249,7 @@ shasum -a 256 -c SHA256SUMS.txt
 | ⌃⇧4 | Capture a region |
 | ⌃⇧5 | Capture a window / app |
 | ⌃⇧3 | Capture the full screen |
+| ⌘⇧2 | Capture text (OCR) and copy it |
 | ⌃⇧2 | Show / hide the floating capture bar |
 | ⌃⇧6 | Open Code Snippet |
 | ⌃⇧7 | Open Compare & Timeline |
@@ -235,6 +264,7 @@ shasum -a 256 -c SHA256SUMS.txt
 | ⌘3 | Compare external images |
 | ⌘4 | Code Snippet |
 | ⌘5 | HTTP Traffic |
+| ⌘6 | Text Capture |
 | ⇧⌘I | Import HTTP traffic (Burp XML, HAR) |
 | ⌘O | Import images into the library |
 | ⌘, | Settings |
@@ -349,6 +379,7 @@ without needing screen access. CI runs it on every push.
 | `--codecompare <before> <after> <out.png> [theme]` | Before/after diff of two snippets |
 | `--codetimeline <out.png> <step files…>` | Numbered timeline of snippets |
 | `--traffic <burp.xml\|file.har\|request.txt> [a b out.png]` | List imported items; optionally compare two requests |
+| `--ocr <image> [plain\|markdown\|csv]` | Recognize the text in an image and print it in the given format |
 | `--permission-status <file>` / `--login-status <file>` | Diagnostics (run through `open -a SecShot --args …`) |
 
 Run them with `/Applications/SecShot.app/Contents/MacOS/SecShot`.
@@ -369,6 +400,9 @@ Sources/SecShot/
 ├── CodeThemeLibrary.swift  Custom / imported themes
 ├── HTTPTraffic.swift       Burp XML / HAR / raw HTTP import, redaction, formatting
 ├── JSONFormatter.swift     Order-preserving JSON pretty-printer
+├── TextRecognizer.swift    OCR (Vision) and layout → plain text / Markdown / CSV
+├── TextCapture.swift       ⌘⇧2 text capture flow and recent captures
+├── ToastHUD.swift          Non-activating "copied" notice
 ├── ExportService.swift     Metadata-free export, clipboard, manifest
 ├── HotKeys.swift           Global hotkeys (Carbon)
 ├── LoginItem.swift         Background launch at login

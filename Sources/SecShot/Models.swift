@@ -29,6 +29,17 @@ enum Prefs {
     static let captureBarX = "captureBarX"
     static let captureBarY = "captureBarY"
     static let redactionText = "redactionText"
+    static let textFormat = "textFormat"
+    static let textLanguage = "textLanguage"
+    static let textLanguageCorrection = "textLanguageCorrection"
+    static let textOpenWindow = "textOpenWindow"
+    static let textShowToast = "textShowToast"
+    // Copy to clipboard, independently per capture feature.
+    static let copyRegion = "copyRegionCapture"
+    static let copyWindow = "copyWindowCapture"
+    static let copyFullscreen = "copyFullscreenCapture"
+    static let copyCompare = "copyComparisonCapture"
+    static let copyText = "copyTextCapture"
 
     static func register() {
         UserDefaults.standard.register(defaults: [
@@ -49,7 +60,30 @@ enum Prefs {
             captureBarPosition: "bottom",
             captureBarTimer: 0,
             redactionText: "[REDACTED]",
+            textFormat: "markdown",
+            textLanguage: "auto",
+            textLanguageCorrection: true,
+            textOpenWindow: false,
+            textShowToast: true,
+            copyRegion: false,
+            copyWindow: false,
+            copyFullscreen: false,
+            copyCompare: false,
+            copyText: true,
         ])
+        migrateCopySetting()
+    }
+
+    /// Earlier versions had a single "copy after capturing" switch; carry it over to the three
+    /// screenshot modes the first time this version runs.
+    private static func migrateCopySetting() {
+        let d = UserDefaults.standard
+        guard d.object(forKey: "copySettingsMigrated") == nil else { return }
+        d.set(true, forKey: "copySettingsMigrated")
+        let explicit = d.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "local.secshot.app")
+        if explicit?[copyAfterCapture] as? Bool == true {
+            for key in [copyRegion, copyWindow, copyFullscreen] { d.set(true, forKey: key) }
+        }
     }
 }
 

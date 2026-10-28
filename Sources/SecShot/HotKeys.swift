@@ -23,6 +23,8 @@ final class HotKeyManager {
         register(UInt32(kVK_ANSI_6), mods) { WindowManager.shared.showCode() }
         register(UInt32(kVK_ANSI_7), mods) { WindowManager.shared.showCompare() }
         register(UInt32(kVK_ANSI_8), mods) { WindowManager.shared.showTraffic() }
+        // ⌘⇧2: capture text (OCR) from a screen area.
+        register(UInt32(kVK_ANSI_2), UInt32(cmdKey | shiftKey)) { TextCaptureStore.shared.captureArea() }
     }
 
     private func install() {

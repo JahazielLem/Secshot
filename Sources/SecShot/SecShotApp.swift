@@ -38,6 +38,8 @@ struct SecShotApp: App {
                     .keyboardShortcut("4", modifiers: .command)
                 Button("HTTP Traffic") { WindowManager.shared.showTraffic() }
                     .keyboardShortcut("5", modifiers: .command)
+                Button("Text Capture") { WindowManager.shared.showText() }
+                    .keyboardShortcut("6", modifiers: .command)
                 Divider()
                 Button("Import HTTP Traffic (Burp, HAR)…") {
                     WindowManager.shared.showTraffic()
@@ -54,6 +56,8 @@ struct SecShotApp: App {
                 Divider()
                 Button("Full Screen in 5 s") { CaptureService.shared.capture(.fullscreen, delay: 5) }
                 Button("Region in 5 s") { CaptureService.shared.capture(.region, delay: 5) }
+                Divider()
+                Button("Capture Text (OCR)  (⌘⇧2)") { TextCaptureStore.shared.captureArea() }
                 Divider()
                 Button("Show/Hide Capture Bar  (⌃⇧2)") { CaptureBar.shared.toggle() }
             }
@@ -118,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         add("Capture Window   ⌃⇧5", #selector(captureWindow))
         add("Capture Screen   ⌃⇧3", #selector(captureFull))
         add("Screen in 5 s", #selector(captureDelayed))
+        add("Capture Text (OCR)   ⌘⇧2", #selector(captureText))
         menu.addItem(.separator())
         add("Compare: Capture BASE", #selector(captureBase))
         add("Compare: Capture CHANGE", #selector(captureChange))
@@ -141,13 +146,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func captureFull() { CaptureService.shared.capture(.fullscreen) }
     @objc private func captureDelayed() { CaptureService.shared.capture(.fullscreen, delay: 5) }
     @objc private func captureBase() {
-        CaptureService.shared.capture(.region, openEditor: false) { item in
+        CaptureService.shared.capture(.region, openEditor: false, forComparison: true) { item in
             if let item { LibraryStore.shared.compareBaseID = item.id }
             WindowManager.shared.showCompare()
         }
     }
     @objc private func captureChange() {
-        CaptureService.shared.capture(.region, openEditor: false) { item in
+        CaptureService.shared.capture(.region, openEditor: false, forComparison: true) { item in
             if let item { LibraryStore.shared.compareChangeID = item.id }
             WindowManager.shared.showCompare()
         }
@@ -158,6 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openCompareExternal() { WindowManager.shared.showCompare(external: true) }
     @objc private func openCode() { WindowManager.shared.showCode() }
     @objc private func openTraffic() { WindowManager.shared.showTraffic() }
+    @objc private func captureText() { TextCaptureStore.shared.captureArea() }
     @objc private func openSettings() { WindowManager.shared.showSettings() }
     @objc private func quit() { NSApp.terminate(nil) }
 }

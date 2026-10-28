@@ -51,7 +51,18 @@ final class CaptureService {
     static let shared = CaptureService()
     private var isCapturing = false
 
-    func capture(_ mode: CaptureMode, delay: Int = 0, openEditor: Bool? = nil,
+    /// Clipboard setting that applies to a capture.
+    static func copyKey(for mode: CaptureMode, forComparison: Bool) -> String {
+        if forComparison { return Prefs.copyCompare }
+        switch mode {
+        case .region: return Prefs.copyRegion
+        case .window: return Prefs.copyWindow
+        case .fullscreen: return Prefs.copyFullscreen
+        }
+    }
+
+    /// `forComparison`: captures taken for Compare / Timeline slots use their own clipboard setting.
+    func capture(_ mode: CaptureMode, delay: Int = 0, openEditor: Bool? = nil, forComparison: Bool = false,
                  completion: ((CaptureItem?) -> Void)? = nil) {
         guard !isCapturing else { return }
         guard ScreenPermission.ensure() else { completion?(nil); return }
@@ -79,20 +90,21 @@ final class CaptureService {
             process.terminationHandler = { _ in
                 Task { @MainActor in
                     CaptureService.shared.finish(tmp: tmp, mode: mode, hid: hide, wasActive: wasActive,
-                                                 open: shouldOpen, completion: completion)
+                                                 open: shouldOpen, forComparison: forComparison, completion: completion)
                 }
             }
             do {
                 try process.run()
             } catch {
                 NSLog("SecShot: screencapture failed: \(error)")
-                self.finish(tmp: tmp, mode: mode, hid: hide, wasActive: wasActive, open: false, completion: completion)
+                self.finish(tmp: tmp, mode: mode, hid: hide, wasActive: wasActive, open: false,
+                            forComparison: forComparison, completion: completion)
             }
         }
     }
 
     private func finish(tmp: URL, mode: CaptureMode, hid: Bool, wasActive: Bool, open: Bool,
-                        completion: ((CaptureItem?) -> Void)?) {
+                        forComparison: Bool, completion: ((CaptureItem?) -> Void)?) {
         isCapturing = false
         CaptureBar.shared.resume()
         let store = LibraryStore.shared
@@ -102,9 +114,10 @@ final class CaptureService {
             item = store.addImage(fileAt: tmp, mode: mode.rawValue, moveFile: true)
         }
 
-        if let item, UserDefaults.standard.bool(forKey: Prefs.copyAfterCapture),
+        if let item, UserDefaults.standard.bool(forKey: Self.copyKey(for: mode, forComparison: forComparison)),
            let img = store.image(for: item) {
             ExportService.copyImage(img)
+            ToastHUD.show("Copied to the clipboard", subtitle: item.name, symbol: "doc.on.clipboard.fill", duration: 1.6)
         }
 
         if let item, open {

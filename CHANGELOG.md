@@ -2,6 +2,28 @@
 
 > Made by AI
 
+## 0.4.0
+
+### Added
+- **Text Capture (OCR)** — press **⌘⇧2** from any app, select an area, and its text is recognized
+  on-device (Apple Vision) and copied to the clipboard as **Plain text**, **Markdown** or **CSV**.
+  - Tables are detected from aligned columns: Markdown tables, tab-separated plain text (pastes as
+    columns in spreadsheets) or CSV rows. Grid lines read as `|` are cleaned from cells.
+  - Markdown output keeps bullet and numbered lists and turns larger text into headings.
+  - A notice confirms what was copied; the captured image is never written to disk.
+  - New **Text** section (⌘6): detected text boxes over the image, editable output, format switch,
+    OCR from an image file or the clipboard, recent captures (in memory) and "Add Image to Library".
+  - Settings: default format, recognition language, language correction (turn it off for code,
+    hashes and tokens), notice and open-after-capture options.
+  - Tables are rebuilt as a grid: columns from the cells' left edges, rows anchored on the first
+    column. Wrapped (multi-line) cells — common in PDFs and Word documents — become a single cell, and
+    roughly aligned columns (proportional fonts, space padding) are kept apart.
+  - When no text is found only a notice is shown; nothing is copied or added to the history.
+- **Copy to clipboard per capture type** (*Settings → Copy to Clipboard*): region, window,
+  full-screen, comparison/timeline and text captures each have their own switch. The previous single
+  “copy after capturing” setting is migrated to the three screenshot modes.
+- `--ocr <image> [plain|markdown|csv]` and `--ocr-sample` command-line helpers.
+
 ## 0.3.0
 
 ### Added

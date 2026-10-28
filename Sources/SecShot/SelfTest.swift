@@ -19,7 +19,7 @@ import SwiftUI
 enum CommandLineTools {
     private static let knownFlags: Set<String> = [
         "--selftest", "--make-icon", "--permission-status", "--login-status", "--codeshot", "--codecompare",
-        "--codetimeline", "--traffic", "--snapshot-ui", "--background",
+        "--codetimeline", "--traffic", "--snapshot-ui", "--background", "--ocr", "--ocr-sample",
     ]
 
     static func runIfRequested() {
@@ -128,11 +128,35 @@ enum CommandLineTools {
             exit(0)
         }
         if let i = args.firstIndex(of: "--snapshot-ui"), i + 2 < args.count {
-            // Developer aid: SecShot --snapshot-ui <library|compare|code|traffic> <out.png> [traffic file]
+            // Developer aid: SecShot --snapshot-ui <library|compare|code|traffic|text> <out.png> [traffic file | image]
             // Renders the main window offscreen (no Screen Recording permission needed).
             MainActor.assumeIsolated {
                 snapshotUI(section: args[i + 1], output: args[i + 2], trafficFile: i + 3 < args.count ? args[i + 3] : nil)
             }
+            exit(0)
+        }
+        if let i = args.firstIndex(of: "--ocr"), i + 1 < args.count {
+            // SecShot --ocr <image> [plain|markdown|csv]  recognizes text and prints it in the format
+            // Same path as ⌘⇧2: copy to a temporary file, decode it, delete the file, then recognize.
+            let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("secshot-ocr-test-\(UUID().uuidString).png")
+            try? FileManager.default.copyItem(at: URL(fileURLWithPath: args[i + 1]), to: tmp)
+            let loaded = MainActor.assumeIsolated { TextCaptureStore.loadImage(tmp) }
+            try? FileManager.default.removeItem(at: tmp)
+            guard let image = loaded else { print("✗ unreadable image"); exit(1) }
+            let format = i + 2 < args.count ? TextOutputFormat(rawValue: args[i + 2]) ?? .markdown : .markdown
+            let sem = DispatchSemaphore(value: 0)
+            Task.detached {
+                let fragments = await TextRecognizer.recognize(image, languages: [], languageCorrection: true)
+                let out = TextLayoutFormatter.format(fragments, as: format)
+                print("[\(format.label)] \(out.summary)")
+                print(out.text)
+                sem.signal()
+            }
+            sem.wait()
+            exit(0)
+        }
+        if let i = args.firstIndex(of: "--ocr-sample"), i + 1 < args.count {
+            write(ocrSample(), URL(fileURLWithPath: args[i + 1]))
             exit(0)
         }
         if let i = args.firstIndex(of: "--make-icon"), i + 1 < args.count {
@@ -146,7 +170,10 @@ enum CommandLineTools {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.prohibited)
         Prefs.register()
-        if let trafficFile {
+        if section == "text", let image = trafficFile {
+            TextCaptureStore.shared.recognizeFile(URL(fileURLWithPath: image))
+            RunLoop.main.run(until: Date().addingTimeInterval(3))
+        } else if let trafficFile {
             TrafficStore.shared.importFiles([URL(fileURLWithPath: trafficFile)])
             RunLoop.main.run(until: Date().addingTimeInterval(1.5))
             let items = TrafficStore.shared.exchanges
@@ -164,6 +191,44 @@ enum CommandLineTools {
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)
         write(rep.cgImage, URL(fileURLWithPath: output))
+    }
+
+    /// Synthetic document for OCR tests: heading, paragraph, bullet list and a table.
+    private static func ocrSample() -> CGImage? {
+        let W = 1400, H = 900
+        guard let ctx = Renderer.makeContext(width: W, height: H) else { return nil }
+        ctx.setFillColor(.white)
+        ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
+        Renderer.withFlipped(ctx, height: CGFloat(H)) {
+            func text(_ s: String, _ x: CGFloat, _ y: CGFloat, size: CGFloat, weight: NSFont.Weight = .regular) {
+                NSAttributedString(string: s, attributes: [.font: NSFont.systemFont(ofSize: size, weight: weight),
+                                                           .foregroundColor: NSColor.black]).draw(at: CGPoint(x: x, y: y))
+            }
+            text("Vulnerability Summary", 60, 50, size: 46, weight: .bold)
+            text("The assessment of app.example.com identified issues that allow privilege", 60, 130, size: 26)
+            text("escalation and disclosure of customer data.", 60, 166, size: 26)
+            text("• Broken access control on the profile endpoint", 80, 230, size: 26)
+            text("• Missing Content-Security-Policy header", 80, 270, size: 26)
+            text("• Session cookie without the Secure flag", 80, 310, size: 26)
+            let cols: [CGFloat] = [60, 420, 600, 860]
+            let rows = [["Host", "Port", "Service", "Risk"],
+                        ["10.10.20.15", "22", "OpenSSH 8.9", "Low"],
+                        ["10.10.20.15", "443", "nginx 1.18.0", "High"],
+                        ["10.10.20.21", "3306", "MySQL 8.0", "Critical"]]
+            for (r, row) in rows.enumerated() {
+                let y = 400 + CGFloat(r) * 56
+                if r == 0 {
+                    ctx.setFillColor(CGColor(gray: 0.92, alpha: 1))
+                    ctx.fill(CGRect(x: 40, y: y - 10, width: 1100, height: 52))
+                }
+                ctx.setFillColor(CGColor(gray: 0.8, alpha: 1))
+                ctx.fill(CGRect(x: 40, y: y + 43, width: 1100, height: 1.5))
+                for (c, cell) in row.enumerated() {
+                    text(cell, cols[c], y, size: 26, weight: r == 0 ? .semibold : .regular)
+                }
+            }
+        }
+        return ctx.makeImage()
     }
 
     private static func write(_ img: CGImage?, _ url: URL) {

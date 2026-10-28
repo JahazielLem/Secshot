@@ -10,7 +10,7 @@ import SwiftUI
 /// Top-level sections of the main window. New features (findings, projects, reports…) are added
 /// here instead of opening more windows.
 enum AppSection: String, CaseIterable, Identifiable {
-    case library, compare, code, traffic
+    case library, compare, code, traffic, text
 
     var id: String { rawValue }
 
@@ -20,6 +20,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .compare: return "Compare & Timeline"
         case .code: return "Code Snippet"
         case .traffic: return "HTTP Traffic"
+        case .text: return "Text Capture"
         }
     }
 
@@ -29,6 +30,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .compare: return "Compare"
         case .code: return "Code"
         case .traffic: return "Traffic"
+        case .text: return "Text"
         }
     }
 
@@ -38,6 +40,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .compare: return "rectangle.split.2x1"
         case .code: return "chevron.left.forwardslash.chevron.right"
         case .traffic: return "arrow.left.arrow.right.square"
+        case .text: return "text.viewfinder"
         }
     }
 
@@ -47,6 +50,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .compare: return "⌘2"
         case .code: return "⌘4"
         case .traffic: return "⌘5"
+        case .text: return "⌘6"
         }
     }
 }
@@ -71,6 +75,7 @@ struct MainWindowView: View {
                 case .compare: CompareWindowView()
                 case .code: CodeShotView()
                 case .traffic: TrafficView()
+                case .text: TextCaptureView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

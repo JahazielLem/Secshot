@@ -55,6 +55,8 @@ final class WindowManager {
 
     func showTraffic() { showSection(.traffic) }
 
+    func showText() { showSection(.text) }
+
     /// Opens an editor window for any item (used for external images in the comparison workspace).
     func showEditor(_ item: CaptureItem) {
         show("editor-\(item.id.uuidString)", title: "SecShot — Edit \(item.name)", size: NSSize(width: 1200, height: 780)) {

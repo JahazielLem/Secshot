@@ -51,7 +51,7 @@ and redaction inside code text. Together they cover the full loop: capture → c
 16. **Short GIF/video recording** of a flow (e.g. an XSS firing) with the same redaction and focus tools.
 17. **Scrolling capture** for long pages or responses.
 18. **Configurable hotkeys** and Shortcuts.app / AppleScript actions for scripting.
-19. **OCR to code:** turn a terminal screenshot into an editable, styled code snippet.
+19. ◐ *(0.4.0: text capture to plain text / Markdown / CSV)* **OCR to code:** turn a terminal screenshot into an editable, styled code snippet.
 20. **Retest mode:** link a finding's original evidence with the retest evidence and generate the
     remediation before/after automatically.
 

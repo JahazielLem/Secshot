@@ -256,7 +256,7 @@ struct CaptureBarView: View {
                 Button("Capture BASE (region)") { captureSlot(base: true) }
                 Button("Capture CHANGE (region)") { captureSlot(base: false) }
                 Button("Capture Timeline Step") {
-                    CaptureService.shared.capture(.region, delay: state.timer, openEditor: false) { item in
+                    CaptureService.shared.capture(.region, delay: state.timer, openEditor: false, forComparison: true) { item in
                         if let item { LibraryStore.shared.timelineIDs.append(item.id) }
                         WindowManager.shared.showCompare()
                     }
@@ -264,6 +264,10 @@ struct CaptureBarView: View {
                 Divider()
                 Button("Open Comparison…") { WindowManager.shared.showCompare() }
                 Button("Compare External Images…") { WindowManager.shared.showCompare(external: true) }
+            }
+
+            BarButton(symbol: "text.viewfinder", title: "Text", help: "Capture text from an area (⌘⇧2)") {
+                TextCaptureStore.shared.captureArea()
             }
 
             BarButton(symbol: "chevron.left.forwardslash.chevron.right", title: "Code", help: "Code snippet (⌘4)") {
@@ -312,7 +316,7 @@ struct CaptureBarView: View {
     }
 
     private func captureSlot(base: Bool) {
-        CaptureService.shared.capture(.region, delay: state.timer, openEditor: false) { item in
+        CaptureService.shared.capture(.region, delay: state.timer, openEditor: false, forComparison: true) { item in
             if let item {
                 if base { LibraryStore.shared.compareBaseID = item.id } else { LibraryStore.shared.compareChangeID = item.id }
             }

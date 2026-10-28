@@ -235,7 +235,7 @@ struct CompareView: View {
                         Menu("Capture Step") {
                             ForEach(CaptureMode.allCases) { m in
                                 Button(m.label) {
-                                    CaptureService.shared.capture(m, openEditor: false) { item in
+                                    CaptureService.shared.capture(m, openEditor: false, forComparison: true) { item in
                                         if let item { store.timelineIDs.append(item.id) }
                                         WindowManager.shared.showCompare()
                                     }
@@ -522,7 +522,7 @@ struct SlotPicker: View {
                         Text("Capture now:").font(.caption).foregroundStyle(.secondary)
                         ForEach(CaptureMode.allCases) { m in
                             Button {
-                                CaptureService.shared.capture(m, openEditor: false) { item in
+                                CaptureService.shared.capture(m, openEditor: false, forComparison: true) { item in
                                     if let item { itemID = item.id }
                                     WindowManager.shared.showCompare()
                                 }

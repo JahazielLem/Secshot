@@ -17,13 +17,22 @@ struct SettingsView: View {
     @AppStorage(Prefs.playSound) private var sound = false
     @AppStorage(Prefs.hideDuringCapture) private var hide = true
     @AppStorage(Prefs.openEditor) private var openEditor = true
-    @AppStorage(Prefs.copyAfterCapture) private var copyAfter = false
+    @AppStorage(Prefs.copyRegion) private var copyRegion = false
+    @AppStorage(Prefs.copyWindow) private var copyWindow = false
+    @AppStorage(Prefs.copyFullscreen) private var copyFullscreen = false
+    @AppStorage(Prefs.copyCompare) private var copyCompare = false
+    @AppStorage(Prefs.copyText) private var copyText = true
     @AppStorage(Prefs.exportFormat) private var format = "png"
     @AppStorage(Prefs.retinaDPI) private var retina = true
     @AppStorage(Prefs.defaultRedaction) private var redaction = AnnotationKind.pixelate.rawValue
     @AppStorage(Prefs.captureBar) private var captureBar = true
     @ObservedObject private var barState = CaptureBar.shared.state
     @AppStorage(Prefs.redactionText) private var redactionText = "[REDACTED]"
+    @AppStorage(Prefs.textFormat) private var textFormat = TextOutputFormat.markdown.rawValue
+    @AppStorage(Prefs.textLanguage) private var textLanguage = "auto"
+    @AppStorage(Prefs.textLanguageCorrection) private var textLanguageCorrection = true
+    @AppStorage(Prefs.textShowToast) private var textShowToast = true
+    @AppStorage(Prefs.textOpenWindow) private var textOpenWindow = false
     @ViewState private var launchAtLogin = LoginItem.isEnabled
     @ViewState private var loginError: String?
     @ViewState private var screenAccess = ScreenPermission.isGranted
@@ -87,13 +96,46 @@ struct SettingsView: View {
             }
             .onAppear { screenAccess = ScreenPermission.isGranted }
 
+            Section("Copy to Clipboard") {
+                Toggle("Region captures (⌃⇧4)", isOn: $copyRegion)
+                Toggle("Window captures (⌃⇧5)", isOn: $copyWindow)
+                Toggle("Full-screen captures (⌃⇧3)", isOn: $copyFullscreen)
+                Toggle("Comparison and timeline captures", isOn: $copyCompare)
+                Toggle("Text capture (⌘⇧2) — copies the recognized text", isOn: $copyText)
+                Text("Each capture type is independent: when enabled, the result goes straight to the clipboard. Captures are still saved to the library as usual.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Text Capture (OCR)") {
+                Picker("Copy as", selection: $textFormat) {
+                    ForEach(TextOutputFormat.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                .onChange(of: textFormat) {
+                    if let f = TextOutputFormat(rawValue: textFormat), TextCaptureStore.shared.format != f { TextCaptureStore.shared.format = f }
+                }
+                Picker("Language", selection: $textLanguage) {
+                    Text("Automatic").tag("auto")
+                    Text("English").tag("en")
+                    Text("Spanish").tag("es")
+                    Text("English + Spanish").tag("en-es")
+                    Text("Portuguese").tag("pt")
+                    Text("French").tag("fr")
+                    Text("German").tag("de")
+                }
+                Toggle("Language correction", isOn: $textLanguageCorrection)
+                Text("Turn it off when capturing code, hashes, tokens or IDs so they are not “corrected”.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("Show a notice after copying", isOn: $textShowToast)
+                Toggle("Open the Text section after capturing", isOn: $textOpenWindow)
+                LabeledContent("Shortcut") { Text("⌘⇧2").font(.callout.monospaced()) }
+            }
+
             Section("Capture") {
                 Toggle("Hide SecShot while capturing", isOn: $hide)
                 Toggle("Open the editor after capturing", isOn: $openEditor)
-                Toggle("Copy to clipboard after capturing", isOn: $copyAfter)
                 Toggle("Shutter sound", isOn: $sound)
                 LabeledContent("Global hotkeys") {
-                    Text("⌃⇧4 region · ⌃⇧5 window · ⌃⇧3 screen · ⌃⇧2 bar · ⌃⇧6 code · ⌃⇧7 compare / timeline · ⌃⇧8 HTTP traffic")
+                    Text("⌃⇧4 region · ⌃⇧5 window · ⌃⇧3 screen · ⌃⇧2 bar · ⌃⇧6 code · ⌃⇧7 compare / timeline · ⌃⇧8 HTTP traffic · ⌘⇧2 text")
                         .font(.callout).multilineTextAlignment(.trailing)
                 }
                 Button("Open Screen Recording Permissions…") { ScreenPermission.openSettings() }

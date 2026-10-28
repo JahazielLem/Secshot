@@ -65,11 +65,15 @@ Sources/SecShot/
 ├── CodeThemeLibrary.swift  Custom themes, VS Code / TextMate import, JSON export
 ├── HTTPTraffic.swift       Burp XML (XXE-safe) / HAR / raw HTTP import and redaction
 ├── JSONFormatter.swift     Order-preserving JSON pretty-printer
+├── TextRecognizer.swift    OCR and layout reconstruction (tables, lists, headings)
+├── TextCapture.swift       Text capture (⌘⇧2) and recent captures
+├── ToastHUD.swift          Non-activating notices
 ├── CodeStudioModel.swift   Shared Code Snippet content (opened from other sections)
 ├── SelfTest.swift          Command-line utilities (--selftest, --codeshot, …)
 └── Views/
     ├── MainWindowView.swift Single main window with a navigation rail
     ├── TrafficView.swift   HTTP Traffic section
+    ├── TextCaptureView.swift Text Capture (OCR) section
     ├── LibraryView.swift   History, gallery, multi-selection, context menu
     ├── EditorModel.swift   Editor state, undo/redo, detection
     ├── EditorView.swift    Canvas, tools, inspector
